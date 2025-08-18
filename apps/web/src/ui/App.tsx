@@ -147,21 +147,23 @@ export function App() {
 
   return (
     <div className="min-h-full flex flex-col p-4">
-      {/* AppBar */}
-      <div className="flex items-center justify-between">
-        <div className="text-xl font-bold">MyGame</div>
-        <div className="flex items-center gap-3">
-          <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>
-            🏆 Достижения
-          </button>
-          <div className="text-sm px-2 py-1 rounded bg-yellow-100">
-            ⭐ Счёт: {profileScore}
+      {/* AppBar (hidden for solo game page) */}
+      {!(roomId && solo) && (
+        <div className="flex items-center justify-between">
+          <div className="text-xl font-bold">MyGame</div>
+          <div className="flex items-center gap-3">
+            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>
+              🏆 Достижения
+            </button>
+            <div className="text-sm px-2 py-1 rounded bg-yellow-100">
+              ⭐ Счёт: {profileScore}
+            </div>
+            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>
+              🛒 Магазин
+            </button>
           </div>
-          <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>
-            🛒 Магазин
-          </button>
         </div>
-      </div>
+      )}
 
       {roomId ? (
         <div className="grow">
