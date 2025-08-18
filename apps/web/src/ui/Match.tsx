@@ -32,7 +32,7 @@ export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
   }, []);
 
   return (
-    <div className="flex flex-col gap-3 min-h-screen">
+    <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
 
       {/* Phase + timer */}
       <div className="flex items-center justify-between p-2 rounded bg-slate-100">
@@ -64,17 +64,17 @@ export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
       </div>
 
       {/* Controls (wire in App.tsx) */}
-      <div className="flex gap-3">
-        <button onClick={onBuzzer} className="px-4 py-2 rounded bg-blue-600 text-white">
+      <div className="flex items-center gap-2 flex-nowrap">
+        <button onClick={onBuzzer} className="px-3 py-2 rounded bg-blue-600 text-white text-sm md:text-base whitespace-nowrap">
           Сигнал
         </button>
         {solo && (
           <>
-            <button onClick={onPause} className="px-3 py-2 rounded bg-gray-200">Пауза</button>
-            <button onClick={onResume} className="px-3 py-2 rounded bg-gray-200">Продолжить</button>
+            <button onClick={onPause} className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap">Пауза</button>
+            <button onClick={onResume} className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap">Продолжить</button>
           </>
         )}
-        <button onClick={onLeave} className="ml-auto px-3 py-2 rounded bg-red-100 text-red-700">
+        <button onClick={onLeave} className="ml-auto px-3 py-2 rounded bg-red-100 text-red-700 text-sm md:text-base whitespace-nowrap">
           Выйти
         </button>
       </div>
