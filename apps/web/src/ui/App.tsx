@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { getInitDataRaw, getStartParam, getUser } from '../lib/telegram';
-import { connectSocket } from '../lib/socket';
+import { connectSocket, getSocket, disconnectSocket } from '../lib/socket';
 import { useGameStore } from '../state/store';
 import { useUiHome } from '../state/ui';
+import { Match } from './Match';
 
 export function App() {
   const [verified, setVerified] = useState(false);
@@ -112,25 +113,27 @@ export function App() {
   };
 
   const onBuzzer = () => {
-    const initDataRaw = getInitDataRaw() ?? '';
-    const user = getUser();
-    const socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-    if (roomId) (socket as any).emit('buzzer:press', { roomId });
+    const socket = getSocket();
+    if (roomId && socket) (socket as any).emit('buzzer:press', { roomId });
   };
 
   const onPause = () => {
     if (!roomId) return;
-    const initDataRaw = getInitDataRaw() ?? '';
-    const user = getUser();
-    const socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-    (socket as any).emit('solo:pause', { roomId });
+    const socket = getSocket();
+    if (socket) (socket as any).emit('solo:pause', { roomId });
   };
   const onResume = () => {
     if (!roomId) return;
-    const initDataRaw = getInitDataRaw() ?? '';
-    const user = getUser();
-    const socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-    (socket as any).emit('solo:resume', { roomId });
+    const socket = getSocket();
+    if (socket) (socket as any).emit('solo:resume', { roomId });
+  };
+
+  const onLeave = () => {
+    const socket = getSocket();
+    if (socket && roomId) (socket as any).emit('rooms:leave', { roomId });
+    disconnectSocket();
+    leaveRoom();
+    setGameStarted(false);
   };
 
   const [now, setNow] = useState(Date.now());
@@ -160,7 +163,11 @@ export function App() {
         </div>
       </div>
 
-      
+      {roomId ? (
+        <div className="grow">
+          <Match onBuzzer={onBuzzer} onPause={onPause} onResume={onResume} onLeave={onLeave} />
+        </div>
+      ) : (
         <div className="grow flex flex-col items-center justify-center gap-4">
           {pendingRoomId && (
             <div className="w-full max-w-md p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
@@ -179,7 +186,7 @@ export function App() {
           </button>
           {!verified && <div className="text-sm text-gray-500">Верификация...</div>}
         </div>
-      
+      )}
 
       {/* Modals (simple placeholders) */}
       {shopOpen && (

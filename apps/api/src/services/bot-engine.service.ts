@@ -23,7 +23,7 @@ export class BotEngineService {
   private PREPARE_MS = this.intFromEnv('PREPARE_MS', 1500);
   private ANSWER_WAIT_MS = this.intFromEnv('ANSWER_WAIT_MS', 2500);
   private SCORE_APPLY_MS = this.intFromEnv('SCORE_APPLY_MS', 1000);
-  private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', true);
+  private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', false);
 
   constructor(
     private timers: TimerRegistryService,
@@ -48,6 +48,14 @@ export class BotEngineService {
     this.goto(roomId, 'prepare', now + this.PREPARE_MS);
     this.timers.set(roomId, 'phase_prepare', this.PREPARE_MS, () => this.gotoBuzzer(roomId));
     this.telemetry.soloStarted(roomId);
+  }
+
+  stop(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr) return;
+    rr.running = false;
+    this.timers.clearAll(roomId);
+    this.rooms.delete(roomId);
   }
 
   pause(roomId: string) {

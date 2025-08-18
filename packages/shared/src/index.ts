@@ -46,7 +46,7 @@ export const ZRoomState = z.object({
   players: z.array(ZRoomPlayer),
   createdAt: z.number().int(),
 });
-export const ZBotHint = z.object({ playerId: z.string(), action: z.enum(['buzz', 'answer', 'pass']) });
+export const ZBotHint = z.object({ playerId: z.number().int(), action: z.enum(['buzz', 'answer', 'pass']) });
 
 export type TInitVerifyReq = z.infer<typeof ZInitVerifyReq>;
 export type TInitVerifyRes = z.infer<typeof ZInitVerifyRes>;

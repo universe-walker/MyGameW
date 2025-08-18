@@ -97,6 +97,13 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const solo = meta.solo === '1';
     const state = { roomId, solo, players, createdAt };
     this.server.to(roomId).emit('room:state', state as any);
+    // If it's a solo room and no human players remain, stop the engine
+    if (solo) {
+      const hasHuman = players.some((p) => !p.bot);
+      if (!hasHuman && this.engine.isRunning(roomId)) {
+        this.engine.stop(roomId);
+      }
+    }
   }
 
   @SubscribeMessage('solo:pause')
@@ -172,6 +179,13 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           createdAt: Number(meta.createdAt),
         };
         this.server.to(roomId).emit('room:state', state as any);
+        // If it's a solo room and no human players remain, stop the engine
+        if (state.solo) {
+          const hasHuman = players.some((p: { bot?: boolean }) => !p.bot);
+          if (!hasHuman && this.engine.isRunning(roomId)) {
+            this.engine.stop(roomId);
+          }
+        }
       }
     }
   }
