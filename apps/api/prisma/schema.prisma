@@ -12,6 +12,8 @@ model User {
   username   String?  @db.VarChar(255)
   firstName  String   @db.VarChar(255)
   RoomPlayer RoomPlayer[]
+  UserMeta   UserMeta?
+  BillingPurchase BillingPurchase[]
 }
 
 model Room {
@@ -29,6 +31,56 @@ model RoomPlayer {
   User User @relation(fields: [userId], references: [id])
 
   @@id([roomId, userId])
+}
+
+// New: Question and types
+enum QuestionType {
+  text
+  word
+}
+
+model Question {
+  id               String       @id @default(uuid())
+  createdAt        DateTime     @default(now())
+  type             QuestionType
+  category         String?      @db.VarChar(100)
+  prompt           String       @db.Text
+  rawAnswer        String       @db.Text
+  canonicalAnswer  String       @db.Text
+}
+
+// New: BillingPurchase and UserMeta
+enum BillingStatus {
+  paid
+  refunded
+}
+
+enum BillingType {
+  hint_letter
+}
+
+model BillingPurchase {
+  id              String        @id @default(uuid())
+  createdAt       DateTime      @default(now())
+  userId          BigInt
+  type            BillingType
+  qty             Int
+  status          BillingStatus @default(paid)
+  tgPaymentId     String        @db.Text
+
+  User User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model UserMeta {
+  id            String   @id @default(uuid())
+  userId        BigInt   @unique
+  hintAllowance Int      @default(0)
+  profileScore  Int      @default(0)
+  achievements  Json?
+
+  User User @relation(fields: [userId], references: [id])
 }
 
 
