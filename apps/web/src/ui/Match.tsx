@@ -32,20 +32,7 @@ export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
   }, []);
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Scoreboard */}
-      <div className="grid grid-cols-3 gap-3">
-        {players.map((p, i) => (
-          <div key={p.id} className="rounded bg-slate-800 text-white p-3 flex flex-col items-center">
-            <div className="text-sm opacity-80">{p.bot ? `Бот ${i + 1}` : 'Вы'}</div>
-            <div className="text-lg font-semibold">{p.name}</div>
-            <div className="mt-2 text-2xl">0</div>
-            {p.bot && (
-              <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? '...'}</div>
-            )}
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-col gap-3 min-h-screen">
 
       {/* Phase + timer */}
       <div className="flex items-center justify-between p-2 rounded bg-slate-100">
@@ -90,6 +77,20 @@ export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
         <button onClick={onLeave} className="ml-auto px-3 py-2 rounded bg-red-100 text-red-700">
           Выйти
         </button>
+      </div>
+
+      {/* Scoreboard moved to bottom */}
+      <div className="grid grid-cols-3 gap-3 mt-auto">
+        {players.map((p, i) => (
+          <div key={p.id} className="rounded bg-slate-800 text-white p-3 flex flex-col items-center">
+            <div className="text-sm opacity-80">{p.bot ? `Бот ${i + 1}` : 'Вы'}</div>
+            <div className="text-lg font-semibold">{p.name}</div>
+            <div className="mt-2 text-2xl">0</div>
+            {p.bot && (
+              <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? '...'}</div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
