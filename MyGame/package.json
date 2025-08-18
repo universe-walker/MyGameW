@@ -1,0 +1,29 @@
+{
+  "name": "mygame-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r --parallel run build",
+    "dev": "pnpm -r --parallel run dev",
+    "lint": "pnpm -r --parallel run lint",
+    "test": "pnpm -r --parallel run test",
+    "format": "pnpm -r --parallel run format"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.1.0",
+    "@typescript-eslint/parser": "^8.1.0",
+    "eslint": "^9.6.0",
+    "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  }
+}
+
+
