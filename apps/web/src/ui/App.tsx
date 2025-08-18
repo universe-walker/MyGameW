@@ -160,8 +160,7 @@ export function App() {
         </div>
       </div>
 
-      {!gameStarted ? (
-        // Main actions
+      
         <div className="grow flex flex-col items-center justify-center gap-4">
           {pendingRoomId && (
             <div className="w-full max-w-md p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
@@ -180,53 +179,7 @@ export function App() {
           </button>
           {!verified && <div className="text-sm text-gray-500">Верификация...</div>}
         </div>
-      ) : (
-        // Match screen (basic)
-        <div className="grow flex flex-col gap-4">
-          <div className="p-3 rounded bg-gray-100 flex items-center justify-between">
-            <div>
-              <div className="font-semibold">Фаза: {phase}</div>
-              {remainingMs !== undefined && <div className="text-sm text-gray-600">До окончания: {(remainingMs / 1000).toFixed(1)}с</div>}
-            </div>
-            {solo && (
-              <div className="flex gap-2">
-                <button className="px-3 py-1 rounded bg-gray-200" onClick={onPause}>Пауза</button>
-                <button className="px-3 py-1 rounded bg-gray-200" onClick={onResume}>Продолжить</button>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <button
-                className="px-3 py-1 rounded bg-gray-200"
-                onClick={() => {
-                  const initDataRaw = getInitDataRaw() ?? '';
-                  const user = getUser();
-                  const socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-                  if (roomId) (socket as any).emit('rooms:leave', { roomId });
-                  leaveRoom();
-                  setGameStarted(false);
-                }}
-              >
-                Выйти в меню
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {players.map((p) => (
-              <div key={p.id} className="p-3 rounded border flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{p.name} {p.bot ? '🤖' : '🧑'}</div>
-                  <div className="text-sm text-gray-600">{botStatuses[p.id] ?? 'idle'}</div>
-                </div>
-                {!p.bot && (
-                  <button className="px-3 py-2 rounded bg-red-600 text-white" onClick={onBuzzer} disabled={phase !== 'buzzer_window'}>
-                    ЖМИ!
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      
 
       {/* Modals (simple placeholders) */}
       {shopOpen && (

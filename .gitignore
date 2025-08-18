@@ -9,3 +9,4 @@ coverage/
 pnpm-lock.yaml
 
 
+apps/web/src/**/*.js
