@@ -1,6 +1,8 @@
 import {
   MessageBody,
+  ConnectedSocket,
   OnGatewayConnection,
+  OnGatewayDisconnect,
   OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
@@ -10,34 +12,43 @@ import { Server, Socket } from 'socket.io';
 import { RedisService } from '../services/redis.service';
 import { ZRoomsJoinReq } from '@mygame/shared';
 import crypto from 'crypto';
+import { BotEngineService } from '../services/bot-engine.service';
 
 @WebSocketGateway({ namespace: '/game', cors: { origin: true, credentials: true } })
-export class GameGateway implements OnGatewayInit, OnGatewayConnection {
+export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
-  constructor(private redis: RedisService) {}
+  constructor(private redis: RedisService, private engine: BotEngineService) {}
 
-  afterInit(_server: Server) {}
+  afterInit(server: Server) {
+    this.engine.setServer(server);
+  }
 
   handleConnection(client: Socket) {
     const initDataRaw = client.handshake.auth?.initDataRaw as string | undefined;
     const token = process.env.TELEGRAM_BOT_TOKEN || '';
+    const allowDev = process.env.ALLOW_DEV_NO_TG === '1' || !token;
     if (!initDataRaw || !verifyInitData(initDataRaw, token).ok) {
-      client.disconnect(true);
-      return;
+      if (!allowDev) {
+        client.disconnect(true);
+        return;
+      }
+      // In development, allow connection without Telegram auth
     }
   }
 
   @SubscribeMessage('rooms:create')
-  async onRoomsCreate(client: Socket) {
+  async onRoomsCreate(@ConnectedSocket() client: Socket) {
     const roomId = crypto.randomUUID();
-    await this.redis.client.hset(`room:${roomId}:meta`, { createdAt: String(Date.now()) });
-    client.emit('room:state', { roomId, players: [], createdAt: Date.now() });
+    const now = Date.now();
+    await this.redis.client.hset(`room:${roomId}:meta`, { createdAt: String(now), solo: '0', botCount: '0' });
+    const state = { roomId, solo: false, players: [], createdAt: now };
+    client.emit('room:state', state as any);
   }
 
   @SubscribeMessage('rooms:join')
-  async onRoomsJoin(client: Socket, @MessageBody() payload: unknown) {
+  async onRoomsJoin(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
     const parsed = ZRoomsJoinReq.safeParse(payload);
     if (!parsed.success) return;
     const { roomId } = parsed.data;
@@ -47,13 +58,122 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection {
     const player = user ? { id: user.id, name: user.first_name } : { id: 0, name: 'Anon' };
     await this.redis.client.sadd(`room:${roomId}:players`, JSON.stringify(player));
     const all = await this.redis.client.smembers(`room:${roomId}:players`);
-    const players = all.map((p) => JSON.parse(p) as { id: number; name: string });
-    this.server.to(roomId).emit('room:state', { roomId, players, createdAt: Date.now() });
+    const players = all.map((p) => JSON.parse(p) as { id: number; name: string; bot?: boolean });
+    const meta = await this.redis.client.hgetall(`room:${roomId}:meta`);
+    const createdAt = meta.createdAt ? Number(meta.createdAt) : Date.now();
+    const solo = meta.solo === '1';
+    const state = { roomId, solo, players, createdAt };
+    this.server.to(roomId).emit('room:state', state as any);
+    if (solo && !this.engine.isRunning(roomId)) {
+      this.engine.start(roomId);
+    }
+  }
+
+  @SubscribeMessage('rooms:leave')
+  async onRoomsLeave(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
+    const roomId = payload?.roomId;
+    if (!roomId) return;
+    // Remove player from Redis set if we can identify them
+    const userJson = client.handshake.auth?.user as string | undefined;
+    const user = userJson ? (JSON.parse(userJson) as { id: number; first_name?: string }) : null;
+    const all = await this.redis.client.smembers(`room:${roomId}:players`);
+    const playerToRemove = all.find((p) => {
+      try {
+        const player = JSON.parse(p) as { id: number };
+        return user ? player.id === user.id : player.id === 0;
+      } catch {
+        return false;
+      }
+    });
+    if (playerToRemove) {
+      await this.redis.client.srem(`room:${roomId}:players`, playerToRemove);
+    }
+    await client.leave(roomId);
+    // Emit updated room state to remaining clients
+    const remaining = await this.redis.client.smembers(`room:${roomId}:players`);
+    const players = remaining.map((p) => JSON.parse(p) as { id: number; name: string; bot?: boolean });
+    const meta = await this.redis.client.hgetall(`room:${roomId}:meta`);
+    const createdAt = meta.createdAt ? Number(meta.createdAt) : Date.now();
+    const solo = meta.solo === '1';
+    const state = { roomId, solo, players, createdAt };
+    this.server.to(roomId).emit('room:state', state as any);
+  }
+
+  @SubscribeMessage('solo:pause')
+  onSoloPause(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
+    void client; // no-op
+    if (!payload?.roomId) return;
+    this.engine.pause(payload.roomId);
+  }
+
+  @SubscribeMessage('solo:resume')
+  onSoloResume(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
+    void client; // no-op
+    if (!payload?.roomId) return;
+    this.engine.resume(payload.roomId);
+  }
+
+  @SubscribeMessage('buzzer:press')
+  onBuzzerPress(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
+    const userJson = client.handshake.auth?.user as string | undefined;
+    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
+    if (!user || !payload?.roomId) return;
+    this.engine.onHumanBuzzer(payload.roomId, user.id);
+  }
+
+  @SubscribeMessage('answer:submit')
+  onAnswerSubmit(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string; text: string }) {
+    const userJson = client.handshake.auth?.user as string | undefined;
+    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
+    if (!user || !payload?.roomId) return;
+    this.engine.onHumanAnswer(payload.roomId, user.id, payload.text);
   }
 
   @SubscribeMessage('ping')
-  onPing(client: Socket) {
+  onPing(@ConnectedSocket() client: Socket) {
     client.emit('pong');
+  }
+
+  async handleDisconnect(client: Socket) {
+    const userJson = client.handshake.auth?.user as string | undefined;
+    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
+    // On disconnect, we need to find which room the user was in and remove them.
+    // This is important for preventing users from being stuck in a room across sessions.
+    const userId = user?.id ?? 0; // 0 for Anon players in dev
+
+    // Scan all rooms for the disconnected player.
+    // Note: In a larger-scale application, a more direct mapping like
+    // a user ID to room ID lookup would be more efficient than scanning.
+    const roomKeys = await this.redis.client.keys('room:*:players');
+    for (const key of roomKeys) {
+      const members = await this.redis.client.smembers(key);
+      const playerToRemove = members.find((p) => {
+        try {
+          const player = JSON.parse(p) as { id: number; bot?: boolean };
+          // Do not remove bots on disconnect, only human players
+          return !player.bot && player.id === userId;
+        } catch {
+          return false;
+        }
+      });
+
+      if (playerToRemove) {
+        const roomId = key.split(':')[1];
+        await this.redis.client.srem(key, playerToRemove);
+
+        // Notify the remaining players in the room about the updated state.
+        const remaining = await this.redis.client.smembers(key);
+        const players = remaining.map((p) => JSON.parse(p));
+        const meta = await this.redis.client.hgetall(`room:${roomId}:meta`);
+        const state = {
+          roomId,
+          solo: meta.solo === '1',
+          players,
+          createdAt: Number(meta.createdAt),
+        };
+        this.server.to(roomId).emit('room:state', state as any);
+      }
+    }
   }
 }
 

@@ -12,6 +12,8 @@ export const ZInitVerifyRes = z.object({
 });
 
 export const ZRoomsCreateRes = z.object({ roomId: z.string().uuid() });
+// Solo: explicit create response (alias by contract name in TZ)
+export const ZCreateSoloRes = z.object({ roomId: z.string().uuid() });
 export const ZRoomsJoinReq = z.object({ roomId: z.string().uuid() });
 
 // Billing
@@ -36,29 +38,74 @@ export const ZProfileRes = z.object({
 export const ZQuestionRevealWord = z.object({ len: z.number().int(), mask: z.string(), canReveal: z.boolean() });
 export const ZWordReveal = z.object({ position: z.number().int(), char: z.string().length(1) });
 
+// RoomState and bot hint contracts for solo
+export const ZRoomPlayer = z.object({ id: z.number().int(), name: z.string(), bot: z.boolean().optional() });
+export const ZRoomState = z.object({
+  roomId: z.string().uuid(),
+  solo: z.boolean(),
+  players: z.array(ZRoomPlayer),
+  createdAt: z.number().int(),
+});
+export const ZBotHint = z.object({ playerId: z.string(), action: z.enum(['buzz', 'answer', 'pass']) });
+
 export type TInitVerifyReq = z.infer<typeof ZInitVerifyReq>;
 export type TInitVerifyRes = z.infer<typeof ZInitVerifyRes>;
 export type TRoomsCreateRes = z.infer<typeof ZRoomsCreateRes>;
+export type TCreateSoloRes = z.infer<typeof ZCreateSoloRes>;
 export type TRoomsJoinReq = z.infer<typeof ZRoomsJoinReq>;
 export type TInvoiceCreateReq = z.infer<typeof ZInvoiceCreateReq>;
 export type TInvoiceCreateRes = z.infer<typeof ZInvoiceCreateRes>;
 export type TProfileRes = z.infer<typeof ZProfileRes>;
 export type TQuestionRevealWord = z.infer<typeof ZQuestionRevealWord>;
 export type TWordReveal = z.infer<typeof ZWordReveal>;
+export type TRoomPlayer = z.infer<typeof ZRoomPlayer>;
+export type TRoomState = z.infer<typeof ZRoomState>;
+
+// Solo game phases and bot statuses
+export const ZGamePhase = z.enum([
+  'idle',
+  'prepare',
+  'buzzer_window',
+  'answer_wait',
+  'score_apply',
+  'round_end',
+  'final',
+]);
+export const ZGamePhaseEvent = z.object({
+  roomId: z.string().uuid(),
+  phase: ZGamePhase,
+  // Optional timestamp (ms since epoch) when this phase is expected to end
+  until: z.number().int().optional(),
+});
+export const ZBotStatus = z.object({
+  roomId: z.string().uuid(),
+  playerId: z.number().int(),
+  status: z.enum(['idle', 'thinking', 'buzzed', 'answering', 'passed', 'wrong', 'correct']),
+  at: z.number().int(),
+});
+
+export type TGamePhase = z.infer<typeof ZGamePhase>;
+export type TGamePhaseEvent = z.infer<typeof ZGamePhaseEvent>;
+export type TBotStatus = z.infer<typeof ZBotStatus>;
 
 export type TSocketClientToServerEvents = {
   'rooms:create': () => void;
   'rooms:join': (payload: { roomId: string }) => void;
+  'rooms:leave': (payload: { roomId: string }) => void;
   'hint:reveal_letter': () => void;
+  // Solo-only controls
+  'solo:pause': (payload: { roomId: string }) => void;
+  'solo:resume': (payload: { roomId: string }) => void;
+  // Human actions
+  'buzzer:press': (payload: { roomId: string }) => void;
+  'answer:submit': (payload: { roomId: string; text: string }) => void;
   ping: () => void;
 };
 
 export type TSocketServerToClientEvents = {
-  'room:state': (state: {
-    roomId: string;
-    players: Array<{ id: number; name: string }>;
-    createdAt: number;
-  }) => void;
+  'room:state': (state: TRoomState) => void;
+  'game:phase': (payload: TGamePhaseEvent) => void;
+  'bot:status': (payload: TBotStatus) => void;
   'word:reveal': (payload: { position: number; char: string }) => void;
   pong: () => void;
 };

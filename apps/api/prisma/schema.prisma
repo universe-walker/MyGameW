@@ -20,6 +20,10 @@ model Room {
   id         String       @id @default(uuid())
   createdAt  DateTime     @default(now())
   RoomPlayer RoomPlayer[]
+  // Solo mode flags
+  solo       Boolean      @default(false)
+  botCount   Int          @default(0)
+  BotInstance BotInstance[]
 }
 
 model RoomPlayer {
@@ -83,4 +87,15 @@ model UserMeta {
   User User @relation(fields: [userId], references: [id])
 }
 
+// Track which bot profiles were used in a solo match (optional)
+model BotInstance {
+  id          String   @id @default(uuid())
+  roomId      String
+  profileCode String   @db.VarChar(50)
+  seededAt    DateTime @default(now())
+
+  Room Room @relation(fields: [roomId], references: [id])
+
+  @@index([roomId])
+}
 
