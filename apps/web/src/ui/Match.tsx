@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGameStore } from '../state/store';
 import { getSocket } from '../lib/socket';
 
@@ -42,6 +42,68 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
     return { cats, costs };
   }, [board]);
 
+  // Measure category title heights and align all to the tallest (with an upper cap)
+  const headerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [headerHeight, setHeaderHeight] = useState<number>(0);
+  const MAX_HEADER_H = 112; // px cap for too long titles (about 3–4 lines)
+
+  // Per-header dynamic font-size to make words fit without breaking
+  const [headerFontSizes, setHeaderFontSizes] = useState<number[]>([]);
+  useEffect(() => {
+    const fitAll = () => {
+      const isWide = window.innerWidth >= 1024;
+      const isMd = window.innerWidth >= 640;
+      const MAX_FS = isWide ? 20 : isMd ? 18 : 16; // upper bound responsive to screen
+      const MIN_FS = 11;
+      const next: number[] = new Array(grid.cats.length).fill(MIN_FS);
+      headerRefs.current.forEach((el, i) => {
+        if (!el) return;
+        // Ensure natural wrapping (no mid-word breaks)
+        el.style.wordBreak = 'normal';
+        el.style.overflowWrap = 'normal';
+        // Binary search suitable font-size
+        let lo = MIN_FS;
+        let hi = MAX_FS;
+        let best = MIN_FS;
+        for (let k = 0; k < 12; k++) {
+          const mid = Math.floor((lo + hi) / 2);
+          el.style.fontSize = `${mid}px`;
+          // Force reflow by reading
+          const wOk = el.scrollWidth <= el.clientWidth + 1;
+          const hOk = el.scrollHeight <= MAX_HEADER_H;
+          if (wOk && hOk) {
+            best = mid;
+            lo = mid + 1;
+          } else {
+            hi = mid - 1;
+          }
+        }
+        next[i] = best;
+      });
+      setHeaderFontSizes(next);
+    };
+    const id = requestAnimationFrame(fitAll);
+    window.addEventListener('resize', fitAll);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('resize', fitAll);
+    };
+  }, [grid.cats]);
+
+  useEffect(() => {
+    const measure = () => {
+      const heights = headerRefs.current.map((el) => el?.offsetHeight ?? 0);
+      const max = heights.length ? Math.max(...heights) : 0;
+      setHeaderHeight(Math.min(max, MAX_HEADER_H));
+    };
+    const id = requestAnimationFrame(measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('resize', measure);
+    };
+  }, [grid.cats, headerFontSizes]);
+
   // My player id (first non-bot)
   const myId = useMemo(() => players.find((p) => !p.bot)?.id ?? 0, [players]);
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
@@ -77,9 +139,13 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
         className="grid gap-3"
         style={{ gridTemplateColumns: `repeat(${grid.cats.length}, minmax(0, 1fr))` }}
       >
-        {grid.cats.map((c) => (
+        {grid.cats.map((c, i) => (
           <div key={c} className="flex flex-col gap-3">
-            <div className="rounded bg-indigo-900 text-white text-center py-2 font-semibold">
+            <div
+              ref={(el) => (headerRefs.current[i] = el)}
+              className="rounded bg-indigo-900 text-white text-center font-semibold flex items-center justify-center px-2 py-2 overflow-hidden whitespace-normal break-normal leading-tight"
+              style={{ height: headerHeight || undefined, fontSize: headerFontSizes[i] ? `${headerFontSizes[i]}px` : undefined }}
+            >
               {c}
             </div>
             {grid.costs.map((cost) => (
