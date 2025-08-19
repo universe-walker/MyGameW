@@ -50,6 +50,8 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
   // Per-header dynamic font-size to make words fit without breaking
   const [headerFontSizes, setHeaderFontSizes] = useState<number[]>([]);
   useEffect(() => {
+    // Run only when board is visible (prepare phase with no active question)
+    if (!(phase === 'prepare' && !question)) return;
     const fitAll = () => {
       const isWide = window.innerWidth >= 1024;
       const isMd = window.innerWidth >= 640;
@@ -88,12 +90,15 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
       cancelAnimationFrame(id);
       window.removeEventListener('resize', fitAll);
     };
-  }, [grid.cats]);
+  }, [grid.cats, phase, question]);
 
   useEffect(() => {
+    // Run only when board is visible (prepare phase with no active question)
+    if (!(phase === 'prepare' && !question)) return;
     const measure = () => {
       const heights = headerRefs.current.map((el) => el?.offsetHeight ?? 0);
-      const max = heights.length ? Math.max(...heights) : 0;
+      if (!heights.length) return; // keep previous height until mounted
+      const max = Math.max(...heights);
       setHeaderHeight(Math.min(max, MAX_HEADER_H));
     };
     const id = requestAnimationFrame(measure);
@@ -102,13 +107,15 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
       cancelAnimationFrame(id);
       window.removeEventListener('resize', measure);
     };
-  }, [grid.cats, headerFontSizes]);
+  }, [grid.cats, headerFontSizes, phase, question]);
 
   // My player id (first non-bot)
   const myId = useMemo(() => players.find((p) => !p.bot)?.id ?? 0, [players]);
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
   const canBuzz = phase === 'buzzer_window' && activePlayerId == null;
   const canPick = phase === 'prepare' && !question;
+  // Render board only when it's time to pick a cell
+  const showBoard = canPick;
 
   const onPickCell = (category: string, value: number) => {
     if (!roomId || !canPick) return;
@@ -134,34 +141,36 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
         )}
       </div>
 
-      {/* Board: titles above columns (not inside first row) */}
-      <div
-        className="grid gap-3"
-        style={{ gridTemplateColumns: `repeat(${grid.cats.length}, minmax(0, 1fr))` }}
-      >
-        {grid.cats.map((c, i) => (
-          <div key={c} className="flex flex-col gap-3">
-            <div
-              ref={(el) => (headerRefs.current[i] = el)}
-              className="rounded bg-indigo-900 text-white text-center font-semibold flex items-center justify-center px-2 py-2 overflow-hidden whitespace-normal break-normal leading-tight"
-              style={{ height: headerHeight || undefined, fontSize: headerFontSizes[i] ? `${headerFontSizes[i]}px` : undefined }}
-            >
-              {c}
-            </div>
-            {grid.costs.map((cost) => (
-              <button
-                key={`${c}-${cost}`}
-                className={`rounded py-4 text-lg ${canPick ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
-                disabled={!canPick || !board.find((bc) => bc.title === c)?.values.includes(cost)}
-                onClick={() => onPickCell(c, cost)}
-                title={canPick ? 'Выбрать вопрос' : 'Ожидание следующего хода'}
+      {/* Board: show only when selecting a cell (prepare phase) */}
+      {showBoard && (
+        <div
+          className="grid gap-3"
+          style={{ gridTemplateColumns: `repeat(${grid.cats.length}, minmax(0, 1fr))` }}
+        >
+          {grid.cats.map((c, i) => (
+            <div key={c} className="flex flex-col gap-3">
+              <div
+                ref={(el) => (headerRefs.current[i] = el)}
+                className="rounded bg-indigo-900 text-white text-center font-semibold flex items-center justify-center px-2 py-2 overflow-hidden whitespace-normal break-normal leading-tight"
+                style={{ height: headerHeight || undefined, fontSize: headerFontSizes[i] ? `${headerFontSizes[i]}px` : undefined }}
               >
-                {cost}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
+                {c}
+              </div>
+              {grid.costs.map((cost) => (
+                <button
+                  key={`${c}-${cost}`}
+                  className={`rounded py-4 text-lg ${canPick ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                  disabled={!canPick || !board.find((bc) => bc.title === c)?.values.includes(cost)}
+                  onClick={() => onPickCell(c, cost)}
+                  title={canPick ? 'Выбрать вопрос' : 'Ожидание следующего хода'}
+                >
+                  {cost}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Question prompt */}
       {question && (
