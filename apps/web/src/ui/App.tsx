@@ -5,6 +5,7 @@ import { connectSocket, getSocket, disconnectSocket } from '../lib/socket';
 import { useGameStore } from '../state/store';
 import { useUiHome } from '../state/ui';
 import { Match } from './Match';
+import DebugConsole from './DebugConsole';
 
 export function App() {
   const [verified, setVerified] = useState(false);
@@ -28,9 +29,38 @@ export function App() {
     [],
   );
 
+  const showDebugConsole = useMemo(() => {
+    const mode = (import.meta as any).env?.MODE as string | undefined;
+    const flag = (import.meta as any).env?.VITE_DEBUG_CONSOLE as string | undefined;
+    // Defaults: dev -> ON, prod -> OFF. Can override via VITE_DEBUG_CONSOLE.
+    if (flag === 'true') return true;
+    if (flag === 'false') return false;
+    return mode !== 'production';
+  }, []);
+
+  // Helper: fetch with fallback to '/api' prefix if the first request returns 404 or errors
+  const fetchApi = async (path: string, init?: RequestInit) => {
+    const primary = `${apiBase}${path}`;
+    try {
+      const r = await fetch(primary, init);
+      if (r.status !== 404) return r;
+      console.warn('[api] 404 on', primary, '-> trying /api prefix');
+    } catch (e) {
+      console.warn('[api] error on', primary, e, '-> trying /api prefix');
+    }
+    const secondary = `${apiBase}/api${path}`;
+    try {
+      const r2 = await fetch(secondary, init);
+      return r2;
+    } catch (e2) {
+      console.error('[api] error on', secondary, e2);
+      throw e2;
+    }
+  };
+
   const verify = useMutation({
     mutationFn: async (initDataRaw: string) => {
-      const res = await fetch(`${apiBase}/auth/telegram/verify`, {
+      const res = await fetchApi(`/auth/telegram/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ initDataRaw }),
@@ -45,6 +75,17 @@ export function App() {
     const initDataRaw = getInitDataRaw() ?? '';
     const user = getUser();
     verify.mutate(initDataRaw);
+    // API health check
+    (async () => {
+      try {
+        console.log('[health] apiBase =', apiBase);
+        const r = await fetch(`${apiBase}/healthz`);
+        const t = await r.text().catch(() => '');
+        console.log('[health] GET /healthz ->', r.status, t);
+      } catch (e) {
+        console.error('[health] GET /healthz failed', e);
+      }
+    })();
     
     const urlStartParam = new URLSearchParams(location.search).get('start_param');
     const start = getStartParam() ?? urlStartParam;
@@ -55,7 +96,7 @@ export function App() {
     }
     // Try loading profile score when possible
     if (user) {
-      fetch(`${apiBase}/profile?userId=${user.id}`).then(async (r) => {
+      fetchApi(`/profile?userId=${user.id}`).then(async (r) => {
         if (r.ok) {
           const j = (await r.json()) as { profileScore: number };
           if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
@@ -65,51 +106,104 @@ export function App() {
   }, []);
 
   const setupSocketListeners = (socket: any) => {
-    (socket as any).on('room:state', (state: any) => setRoom(state.roomId, state.players, Boolean(state.solo)));
-    (socket as any).on('game:phase', (p: any) => setPhase(p.phase, p.until));
-    (socket as any).on('bot:status', (b: any) => setBotStatus(b.playerId, b.status));
+    console.log('[socket] setupSocketListeners: attaching listeners');
+    (socket as any).off?.('room:state');
+    (socket as any).off?.('game:phase');
+    (socket as any).off?.('bot:status');
+    (socket as any).on('room:state', (state: any) => {
+      console.log('[socket] event room:state', state);
+      setRoom(state.roomId, state.players, Boolean(state.solo));
+    });
+    (socket as any).on('game:phase', (p: any) => {
+      console.log('[socket] event game:phase', p);
+      setPhase(p.phase, p.until);
+    });
+    (socket as any).on('bot:status', (b: any) => {
+      console.log('[socket] event bot:status', b);
+      setBotStatus(b.playerId, b.status);
+    });
   };
 
   const onFindGame = async () => {
+    console.log('[ui] onFindGame: click');
     setGameStarted(true);
-    const initDataRaw = getInitDataRaw() ?? '';
-    const user = getUser();
-    const socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-    
-    setupSocketListeners(socket);
-    
-    // Auto create or join a public room
-    const res = await fetch(`${apiBase}/rooms`, { method: 'POST' });
-    const j = (await res.json()) as { roomId: string };
-    socket.emit('rooms:join', { roomId: j.roomId });
+    try {
+      let socket = getSocket();
+      console.log('[ui] onFindGame: existing socket?', Boolean(socket));
+      if (!socket) {
+        const initDataRaw = getInitDataRaw() ?? '';
+        const user = getUser();
+        console.log('[ui] onFindGame: connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
+        socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
+        setupSocketListeners(socket);
+      }
+      console.log('[ui] onFindGame: POST /rooms');
+      const res = await fetchApi(`/rooms`, { method: 'POST' });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        console.error('[ui] onFindGame: rooms create failed', res.status, txt);
+        return;
+      }
+      const j = (await res.json()) as { roomId: string };
+      console.log('[ui] onFindGame: /rooms ok -> join', j);
+      (socket as any).emit('rooms:join', { roomId: j.roomId });
+      console.log('[ui] onFindGame: emitted rooms:join', j.roomId);
+    } catch (e) {
+      console.error('[ui] onFindGame: error', e);
+    }
   };
 
   const onJoinPendingRoom = () => {
     if (!pendingRoomId) return;
+    console.log('[ui] onJoinPendingRoom: join', pendingRoomId);
     setGameStarted(true);
-    const initDataRaw = getInitDataRaw() ?? '';
-    const user = getUser();
-    const socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-    
-    setupSocketListeners(socket);
-    
-    socket.emit('rooms:join', { roomId: pendingRoomId });
-    // Optionally clear hint once action taken
-    setPendingRoomId(null);
+    try {
+      let socket = getSocket();
+      console.log('[ui] onJoinPendingRoom: existing socket?', Boolean(socket));
+      if (!socket) {
+        const initDataRaw = getInitDataRaw() ?? '';
+        const user = getUser();
+        console.log('[ui] onJoinPendingRoom: connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
+        socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
+        setupSocketListeners(socket);
+      }
+      (socket as any).emit('rooms:join', { roomId: pendingRoomId });
+      console.log('[ui] onJoinPendingRoom: emitted rooms:join', pendingRoomId);
+      // Optionally clear hint once action taken
+      setPendingRoomId(null);
+    } catch (e) {
+      console.error('[ui] onJoinPendingRoom: error', e);
+    }
   };
 
   const onSoloGame = async () => {
     // Create a solo room and auto-join
+    console.log('[ui] onSoloGame: click');
     setGameStarted(true);
-    const initDataRaw = getInitDataRaw() ?? '';
-    const user = getUser();
-    const socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-    
-    setupSocketListeners(socket);
-    
-    const res = await fetch(`${apiBase}/rooms/solo`, { method: 'POST' });
-    const j = (await res.json()) as { roomId: string };
-    socket.emit('rooms:join', { roomId: j.roomId });
+    try {
+      let socket = getSocket();
+      console.log('[ui] onSoloGame: existing socket?', Boolean(socket));
+      if (!socket) {
+        const initDataRaw = getInitDataRaw() ?? '';
+        const user = getUser();
+        console.log('[ui] onSoloGame: connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
+        socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
+        setupSocketListeners(socket);
+      }
+      console.log('[ui] onSoloGame: POST /rooms/solo');
+      const res = await fetchApi(`/rooms/solo`, { method: 'POST' });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        console.error('[ui] onSoloGame: rooms/solo failed', res.status, txt);
+        return;
+      }
+      const j = (await res.json()) as { roomId: string };
+      console.log('[ui] onSoloGame: /rooms/solo ok -> join', j);
+      (socket as any).emit('rooms:join', { roomId: j.roomId });
+      console.log('[ui] onSoloGame: emitted rooms:join', j.roomId);
+    } catch (e) {
+      console.error('[ui] onSoloGame: error', e);
+    }
   };
 
   const onBuzzer = () => {
@@ -223,6 +317,7 @@ export function App() {
           </div>
         </div>
       )}
+      {showDebugConsole && <DebugConsole />}
     </div>
   );
 }
