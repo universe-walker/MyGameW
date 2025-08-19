@@ -124,16 +124,18 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   onBuzzerPress(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
     const userJson = client.handshake.auth?.user as string | undefined;
     const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
-    if (!user || !payload?.roomId) return;
-    this.engine.onHumanBuzzer(payload.roomId, user.id);
+    if (!payload?.roomId) return;
+    const playerId = user?.id ?? 0; // allow Anon in dev to play as id 0
+    this.engine.onHumanBuzzer(payload.roomId, playerId);
   }
 
   @SubscribeMessage('answer:submit')
   onAnswerSubmit(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string; text: string }) {
     const userJson = client.handshake.auth?.user as string | undefined;
     const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
-    if (!user || !payload?.roomId) return;
-    this.engine.onHumanAnswer(payload.roomId, user.id, payload.text);
+    if (!payload?.roomId) return;
+    const playerId = user?.id ?? 0; // allow Anon in dev
+    this.engine.onHumanAnswer(payload.roomId, playerId, payload.text);
   }
 
   @SubscribeMessage('ping')

@@ -74,12 +74,21 @@ export class BotEngineService {
     this.emitBotStatus(roomId, playerId, 'buzzed');
     // Transition to answer wait immediately
     this.goto(roomId, 'answer_wait', Date.now() + this.ANSWER_WAIT_MS);
-    this.timers.set(roomId, 'phase_answer_wait', this.ANSWER_WAIT_MS, () => this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS));
+    this.timers.set(roomId, 'phase_answer_wait', this.ANSWER_WAIT_MS, () => {
+      const rrx = this.rooms.get(roomId);
+      // Guard against early human answer changing phase before this fires
+      if (!rrx || rrx.phase !== 'answer_wait' || rrx.activePlayerId !== playerId) return;
+      // If human did not submit an answer in time, advance automatically
+      this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
+      this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.cycleNext(roomId));
+    });
   }
 
-  onHumanAnswer(roomId: string, _playerId: number, _text: string) {
+  onHumanAnswer(roomId: string, playerId: number, _text: string) {
     const rr = this.rooms.get(roomId);
     if (!rr || rr.phase !== 'answer_wait') return;
+    // Only the active player can answer
+    if (rr.activePlayerId !== playerId) return;
     // For MVP: don't evaluate correctness; proceed to score apply
     this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
     this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.cycleNext(roomId));
@@ -105,6 +114,8 @@ export class BotEngineService {
   private cycleNext(roomId: string) {
     const rr = this.rooms.get(roomId);
     if (!rr?.running) return;
+    // Clear control before next round
+    rr.activePlayerId = null;
     // Simple loop back to prepare
     this.goto(roomId, 'prepare', Date.now() + this.PREPARE_MS);
     this.timers.set(roomId, 'phase_prepare', this.PREPARE_MS, () => this.gotoBuzzer(roomId));
@@ -179,7 +190,9 @@ export class BotEngineService {
   }
 
   private emitPhase(roomId: string, phase: Phase, until?: number) {
-    this.server?.to(roomId).emit('game:phase', { roomId, phase, until } as any);
+    const rr = this.rooms.get(roomId);
+    const activePlayerId = rr?.activePlayerId ?? null;
+    this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId } as any);
   }
 
   private emitBotStatus(roomId: string, playerId: number, status: 'idle' | 'thinking' | 'buzzed' | 'answering' | 'passed' | 'wrong' | 'correct') {

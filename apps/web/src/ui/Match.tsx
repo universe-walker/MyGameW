@@ -3,17 +3,19 @@ import { useGameStore } from '../state/store';
 
 type Props = {
   onBuzzer: () => void;
+  onAnswer: (text: string) => void;
   onPause?: () => void;
   onResume?: () => void;
   onLeave: () => void;
 };
 
-export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
+export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props) {
   const roomId = useGameStore((s) => s.roomId);
   const solo = useGameStore((s) => s.solo);
   const players = useGameStore((s) => s.players);
   const phase = useGameStore((s) => s.phase);
   const until = useGameStore((s) => s.until);
+  const activePlayerId = useGameStore((s) => s.activePlayerId ?? null);
   const botStatuses = useGameStore((s) => s.botStatuses);
 
   const [now, setNow] = useState(Date.now());
@@ -30,6 +32,18 @@ export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
     const costs = [100, 200, 300, 400];
     return { cats, costs };
   }, []);
+
+  // My player id (first non-bot)
+  const myId = useMemo(() => players.find((p) => !p.bot)?.id ?? 0, [players]);
+  const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
+  const canBuzz = phase === 'buzzer_window' && activePlayerId == null;
+
+  const [answer, setAnswer] = useState('');
+  const submitAnswer = () => {
+    if (!isMyTurnToAnswer || !answer.trim()) return;
+    onAnswer(answer.trim());
+    setAnswer('');
+  };
 
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
@@ -65,9 +79,32 @@ export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
 
       {/* Controls (wire in App.tsx) */}
       <div className="flex items-center gap-2 flex-nowrap">
-        <button onClick={onBuzzer} className="px-3 py-2 rounded bg-blue-600 text-white text-sm md:text-base whitespace-nowrap">
+        <button
+          onClick={onBuzzer}
+          disabled={!canBuzz}
+          className={`px-3 py-2 rounded text-sm md:text-base whitespace-nowrap ${canBuzz ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+          title={canBuzz ? 'Жмите, чтобы взять право ответа' : 'Дождитесь окна сигнала'}
+        >
           Сигнал
         </button>
+        {isMyTurnToAnswer && (
+          <div className="flex items-center gap-2">
+            <input
+              className="px-2 py-1 border rounded text-sm md:text-base"
+              placeholder="Ваш ответ..."
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitAnswer();
+              }}
+              autoFocus
+            />
+            <button onClick={submitAnswer} className="px-3 py-2 rounded bg-green-600 text-white text-sm md:text-base">
+              Ответить
+            </button>
+            <div className="text-xs text-green-700">Ваш ход!</div>
+          </div>
+        )}
         {solo && (
           <>
             <button onClick={onPause} className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap">Пауза</button>
@@ -86,8 +123,12 @@ export function Match({ onBuzzer, onPause, onResume, onLeave }: Props) {
             <div className="text-sm opacity-80">{p.bot ? `Бот ${i + 1}` : 'Вы'}</div>
             <div className="text-lg font-semibold">{p.name}</div>
             <div className="mt-2 text-2xl">0</div>
-            {p.bot && (
+            {p.bot ? (
               <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? '...'}</div>
+            ) : (
+              <div className={`mt-1 text-xs ${isMyTurnToAnswer ? 'text-green-300' : 'text-gray-400'}`}>
+                {isMyTurnToAnswer ? 'Ваш ход' : 'Ожидание'}
+              </div>
             )}
           </div>
         ))}

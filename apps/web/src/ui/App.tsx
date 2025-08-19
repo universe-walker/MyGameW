@@ -116,7 +116,7 @@ export function App() {
     });
     (socket as any).on('game:phase', (p: any) => {
       console.log('[socket] event game:phase', p);
-      setPhase(p.phase, p.until);
+      setPhase(p.phase, p.until, p.activePlayerId ?? null);
     });
     (socket as any).on('bot:status', (b: any) => {
       console.log('[socket] event bot:status', b);
@@ -211,6 +211,13 @@ export function App() {
     if (roomId && socket) (socket as any).emit('buzzer:press', { roomId });
   };
 
+  const onAnswer = (text: string) => {
+    const socket = getSocket();
+    if (roomId && socket && text.trim()) {
+      (socket as any).emit('answer:submit', { roomId, text: text.trim() });
+    }
+  };
+
   const onPause = () => {
     if (!roomId) return;
     const socket = getSocket();
@@ -261,7 +268,7 @@ export function App() {
 
       {roomId ? (
         <div className="grow">
-          <Match onBuzzer={onBuzzer} onPause={onPause} onResume={onResume} onLeave={onLeave} />
+          <Match onBuzzer={onBuzzer} onAnswer={onAnswer} onPause={onPause} onResume={onResume} onLeave={onLeave} />
         </div>
       ) : (
         <div className="grow flex flex-col items-center justify-center gap-4">

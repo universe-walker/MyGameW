@@ -76,6 +76,8 @@ export const ZGamePhaseEvent = z.object({
   phase: ZGamePhase,
   // Optional timestamp (ms since epoch) when this phase is expected to end
   until: z.number().int().optional(),
+  // Optional: which player currently holds the right to answer (null when none)
+  activePlayerId: z.number().int().nullable().optional(),
 });
 export const ZBotStatus = z.object({
   roomId: z.string().uuid(),
