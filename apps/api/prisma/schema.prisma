@@ -43,14 +43,33 @@ enum QuestionType {
   word
 }
 
+model Category {
+  id        String     @id @default(uuid())
+  createdAt DateTime   @default(now())
+  title     String     @db.VarChar(255) @unique
+  tags      String[]
+  questions Question[]
+}
+
 model Question {
   id               String       @id @default(uuid())
   createdAt        DateTime     @default(now())
   type             QuestionType
-  category         String?      @db.VarChar(100)
   prompt           String       @db.Text
   rawAnswer        String       @db.Text
   canonicalAnswer  String       @db.Text
+  // New fields for gameplay and metadata
+  value            Int           @default(0)
+  answersAccept    String[]      @default([])
+  answersReject    String[]      @default([])
+  requireFull      Boolean       @default(false)
+  language         String?       @db.VarChar(10)
+  hint             String?       @db.Text
+  // Relation to Category
+  categoryId       String?
+  Category         Category?     @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
 }
 
 // New: BillingPurchase and UserMeta

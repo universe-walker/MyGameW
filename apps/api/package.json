@@ -41,6 +41,9 @@
     "ts-node": "^10.9.2",
     "@types/supertest": "^2.0.16",
     "prisma": "^5.18.0"
+  },
+  "prisma": {
+    "seed": "ts-node --transpile-only prisma/seed.ts"
   }
 }
 
