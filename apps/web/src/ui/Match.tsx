@@ -34,7 +34,11 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
     // Collect unique values across categories, then sort asc
     const valuesSet = new Set<number>();
     board.forEach((c) => c.values.forEach((v) => valuesSet.add(v)));
-    const costs = Array.from(valuesSet).sort((a, b) => a - b);
+    // Limit total rows to max 5 across the board
+    const MAX_ROWS = 5;
+    const costs = Array.from(valuesSet)
+      .sort((a, b) => a - b)
+      .slice(0, MAX_ROWS);
     return { cats, costs };
   }, [board]);
 
@@ -68,26 +72,29 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
         )}
       </div>
 
-      {/* Board */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* Board: titles above columns (not inside first row) */}
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: `repeat(${grid.cats.length}, minmax(0, 1fr))` }}
+      >
         {grid.cats.map((c) => (
-          <div key={c} className="rounded bg-indigo-900 text-white text-center py-2 font-semibold">
-            {c}
+          <div key={c} className="flex flex-col gap-3">
+            <div className="rounded bg-indigo-900 text-white text-center py-2 font-semibold">
+              {c}
+            </div>
+            {grid.costs.map((cost) => (
+              <button
+                key={`${c}-${cost}`}
+                className={`rounded py-4 text-lg ${canPick ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                disabled={!canPick || !board.find((bc) => bc.title === c)?.values.includes(cost)}
+                onClick={() => onPickCell(c, cost)}
+                title={canPick ? 'Выбрать вопрос' : 'Ожидание следующего хода'}
+              >
+                {cost}
+              </button>
+            ))}
           </div>
         ))}
-        {grid.costs.map((cost) =>
-          grid.cats.map((c) => (
-            <button
-              key={`${c}-${cost}`}
-              className={`rounded py-4 text-lg ${canPick ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
-              disabled={!canPick || !board.find((bc) => bc.title === c)?.values.includes(cost)}
-              onClick={() => onPickCell(c, cost)}
-              title={canPick ? 'Выбрать вопрос' : 'Ожидание следующего хода'}
-            >
-              {cost}
-            </button>
-          )),
-        )}
       </div>
 
       {/* Question prompt */}

@@ -90,6 +90,227 @@ const data = {
         },
       ],
     },
+    {
+      "title": "Диагностика и инструментальные методы",
+      "tags": ["diagnostics","imaging","easy"],
+      "questions": [
+        {
+          "value": 100,
+          "type": "text",
+          "prompt": "Прибор для измерения артериального давления?",
+          "answersAccept": ["тонометр","сфигмоманометр","sphygmomanometer"],
+          "answersReject": ["фонендоскоп"],
+          "requireFull": false,
+          "language": "ru",
+          "hint": "Манжета + грушa или автоприбор"
+        },
+        {
+          "value": 200,
+          "type": "word",
+          "prompt": "УЗ-исследование сердца (одно слово)",
+          "answersAccept": ["эхокардиография","эхокг","эхо-кг","echocardiography"],
+          "canonicalAnswer": "эхокардиография",
+          "hint": "Echo..."
+        },
+        {
+          "value": 300,
+          "type": "text",
+          "prompt": "Анализ, отражающий средний уровень глюкозы за 2–3 месяца?",
+          "answersAccept": ["гликированный гемоглобин","hba1c","hb a1c"],
+          "requireFull": false,
+          "language": "ru",
+          "hint": "Hb…"
+        },
+        {
+          "value": 400,
+          "type": "text",
+          "prompt": "Метод визуализации с послойными срезами и ионизирующим излучением?",
+          "answersAccept": ["компьютерная томография","кт","computed tomography","ct"],
+          "answersReject": ["мрт","ультразвук","узи"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 500,
+          "type": "text",
+          "prompt": "Исследование функции внешнего дыхания с форсированным выдохом?",
+          "answersAccept": ["спирометрия","спирография","spirometry"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 600,
+          "type": "word",
+          "prompt": "Исследование сосудов с контрастом (одно слово)",
+          "answersAccept": ["ангиография","angiography"],
+          "canonicalAnswer": "ангиография",
+          "hint": "Ангио-…"
+        }
+      ]
+    },
+    {
+      "title": "Микробиология и инфекции",
+      "tags": ["micro","id"],
+      "questions": [
+        {
+          "value": 100,
+          "type": "text",
+          "prompt": "Возбудитель туберкулёза?",
+          "answersAccept": ["микобактерия туберкулёза","mycobacterium tuberculosis","палочка коха","кокевая палочка— нет"], 
+          "answersReject": ["бордетелла","стрептококк","стафилококк"],
+          "requireFull": false,
+          "language": "ru",
+          "hint": "Палочка Коха"
+        },
+        {
+          "value": 200,
+          "type": "word",
+          "prompt": "Кокк, вызывающий ангину и скарлатину (одно слово)",
+          "answersAccept": ["стрептококк","streptococcus"],
+          "canonicalAnswer": "стрептококк"
+        },
+        {
+          "value": 300,
+          "type": "text",
+          "prompt": "Антибиотик выбора при сифилисе?",
+          "answersAccept": ["пенициллин","benzathine penicillin","бензатиновый пенициллин"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 400,
+          "type": "text",
+          "prompt": "Основной путь передачи гепатита A?",
+          "answersAccept": ["фекально-оральный","энтеральный","fecal-oral"],
+          "answersReject": ["парентеральный","половой","воздушно-капельный"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 500,
+          "type": "text",
+          "prompt": "Препарат первой линии при туберкулёзе, вызывающий нейропатию при дефиците B6?",
+          "answersAccept": ["изониазид","isoniazid","inh"],
+          "requireFull": false,
+          "language": "ru",
+          "hint": "Комбинируют с пиридоксином"
+        },
+        {
+          "value": 600,
+          "type": "word",
+          "prompt": "Род бактерий — возбудитель коклюша (одно слово)",
+          "answersAccept": ["бордетелла","bordetella"],
+          "canonicalAnswer": "бордетелла"
+        }
+      ]
+    },
+    {
+      "title": "Патофизиология и симптомы",
+      "tags": ["pathophys","symptoms"],
+      "questions": [
+        {
+          "value": 100,
+          "type": "text",
+          "prompt": "Термин для ЧСС > 100/мин в покое?",
+          "answersAccept": ["тахикардия","tachycardia"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 200,
+          "type": "word",
+          "prompt": "Снижение концентрации гемоглобина/эритроцитов (одно слово)",
+          "answersAccept": ["анемия","anemia"],
+          "canonicalAnswer": "анемия"
+        },
+        {
+          "value": 300,
+          "type": "text",
+          "prompt": "Скопление жидкости в брюшной полости называется…",
+          "answersAccept": ["асцит","ascites"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 400,
+          "type": "text",
+          "prompt": "Симптом — болезненная чувствительность к свету?",
+          "answersAccept": ["фотофобия","светобоязнь","photophobia"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 500,
+          "type": "text",
+          "prompt": "Тип желтухи при массивном гемолизе?",
+          "answersAccept": ["гемолитическая","надпеченочная","hemolytic"],
+          "answersReject": ["печеночная","подпеченочная","механическая"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 600,
+          "type": "word",
+          "prompt": "Отсутствие мочи (< 100 мл/сут) (одно слово)",
+          "answersAccept": ["анурия","anuria"],
+          "canonicalAnswer": "анурия"
+        }
+      ]
+    },
+    {
+      "title": "Неотложная помощь",
+      "tags": ["er","emergency"],
+      "questions": [
+        {
+          "value": 100,
+          "type": "text",
+          "prompt": "Препарат первой линии при анафилаксии (в/м)?",
+          "answersAccept": ["адреналин","эпинефрин","epinephrine"],
+          "answersReject": ["антигистаминные","стероиды"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 200,
+          "type": "word",
+          "prompt": "Восстановление проходимости дыхательных путей трубкой (одно слово)",
+          "answersAccept": ["интубация","intubation"],
+          "canonicalAnswer": "интубация"
+        },
+        {
+          "value": 300,
+          "type": "text",
+          "prompt": "Антидот при передозировке бензодиазепинов?",
+          "answersAccept": ["флумазенил","flumazenil"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 400,
+          "type": "text",
+          "prompt": "Препарат для коррекции тяжёлой гипогликемии при отсутствии венозного доступа (в/м/п/к)?",
+          "answersAccept": ["глюкагон","glucagon"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 500,
+          "type": "text",
+          "prompt": "Средство для стабилизации кардиомембран при гиперкалиемии?",
+          "answersAccept": ["кальция глюконат","кальция хлорид","calcium gluconate","calcium chloride"],
+          "requireFull": false,
+          "language": "ru"
+        },
+        {
+          "value": 600,
+          "type": "word",
+          "prompt": "Устройство/приём для жёсткой компрессии кровотечения конечности (одно слово)",
+          "answersAccept": ["турникет","жгут","tourniquet"],
+          "canonicalAnswer": "турникет",
+          "hint": "Англ. tourniquet"
+        }
+      ]
+    }
   ],
 };
 

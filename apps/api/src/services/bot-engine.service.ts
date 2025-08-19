@@ -231,13 +231,15 @@ export class BotEngineService {
     const cats = await this.prisma.category.findMany({
       take: 4,
       orderBy: { createdAt: 'asc' },
-      include: { questions: { select: { value: true }, orderBy: { value: 'asc' } } },
+      include: {
+        questions: { select: { value: true }, orderBy: { value: 'asc' }, take: 5 },
+      },
     });
     rr.board = cats.map((c: { title: string; questions: { value: number }[] }) => ({
       title: c.title,
-      values: Array.from(new Set(c.questions.map((q: { value: number }) => q.value))).sort(
-        (a: number, b: number) => a - b,
-      ),
+      values: Array.from(new Set(c.questions.map((q: { value: number }) => q.value)))
+        .sort((a: number, b: number) => a - b)
+        .slice(0, 5),
     }));
   }
 
