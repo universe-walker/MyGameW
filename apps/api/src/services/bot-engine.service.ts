@@ -24,9 +24,9 @@ export class BotEngineService {
   private rooms = new Map<string, RoomRuntime>();
 
   // Config defaults (env overrides)
-  private BUZZER_WINDOW_MS = this.intFromEnv('BUZZER_WINDOW_MS', 3000);
+  private BUZZER_WINDOW_MS = this.intFromEnv('BUZZER_WINDOW_MS', 4500);
   private PREPARE_MS = this.intFromEnv('PREPARE_MS', 1500);
-  private ANSWER_WAIT_MS = this.intFromEnv('ANSWER_WAIT_MS', 2500);
+  private ANSWER_WAIT_MS = this.intFromEnv('ANSWER_WAIT_MS', 9000);
   private SCORE_APPLY_MS = this.intFromEnv('SCORE_APPLY_MS', 1000);
   private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', false);
 
