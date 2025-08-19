@@ -11,6 +11,7 @@ export function App() {
   const [verified, setVerified] = useState(false);
   const setRoom = useGameStore((s) => s.setRoom);
   const setPhase = useGameStore((s) => s.setPhase);
+  const setBoard = useGameStore((s) => s.setBoard);
   const setBotStatus = useGameStore((s) => s.setBotStatus);
   const roomId = useGameStore((s) => s.roomId);
   const solo = useGameStore((s) => s.solo);
@@ -110,17 +111,22 @@ export function App() {
     (socket as any).off?.('room:state');
     (socket as any).off?.('game:phase');
     (socket as any).off?.('bot:status');
+    (socket as any).off?.('board:state');
     (socket as any).on('room:state', (state: any) => {
       console.log('[socket] event room:state', state);
       setRoom(state.roomId, state.players, Boolean(state.solo));
     });
     (socket as any).on('game:phase', (p: any) => {
       console.log('[socket] event game:phase', p);
-      setPhase(p.phase, p.until, p.activePlayerId ?? null);
+      setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question);
     });
     (socket as any).on('bot:status', (b: any) => {
       console.log('[socket] event bot:status', b);
       setBotStatus(b.playerId, b.status);
+    });
+    (socket as any).on('board:state', (b: any) => {
+      console.log('[socket] event board:state', b);
+      if (Array.isArray(b?.categories)) setBoard(b.categories);
     });
   };
 

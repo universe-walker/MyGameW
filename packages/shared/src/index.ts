@@ -78,6 +78,10 @@ export const ZGamePhaseEvent = z.object({
   until: z.number().int().optional(),
   // Optional: which player currently holds the right to answer (null when none)
   activePlayerId: z.number().int().nullable().optional(),
+  // Optional: current question info for the phase
+  question: z
+    .object({ category: z.string(), value: z.number().int(), prompt: z.string() })
+    .optional(),
 });
 export const ZBotStatus = z.object({
   roomId: z.string().uuid(),
@@ -90,6 +94,12 @@ export type TGamePhase = z.infer<typeof ZGamePhase>;
 export type TGamePhaseEvent = z.infer<typeof ZGamePhaseEvent>;
 export type TBotStatus = z.infer<typeof ZBotStatus>;
 
+// Board state (lightweight for client rendering)
+export const ZBoardCategory = z.object({ title: z.string(), values: z.array(z.number().int()) });
+export const ZBoardState = z.object({ roomId: z.string().uuid(), categories: z.array(ZBoardCategory) });
+export type TBoardCategory = z.infer<typeof ZBoardCategory>;
+export type TBoardState = z.infer<typeof ZBoardState>;
+
 export type TSocketClientToServerEvents = {
   'rooms:create': () => void;
   'rooms:join': (payload: { roomId: string }) => void;
@@ -101,6 +111,7 @@ export type TSocketClientToServerEvents = {
   // Human actions
   'buzzer:press': (payload: { roomId: string }) => void;
   'answer:submit': (payload: { roomId: string; text: string }) => void;
+  'board:pick': (payload: { roomId: string; category: string; value: number }) => void;
   ping: () => void;
 };
 
@@ -108,6 +119,7 @@ export type TSocketServerToClientEvents = {
   'room:state': (state: TRoomState) => void;
   'game:phase': (payload: TGamePhaseEvent) => void;
   'bot:status': (payload: TBotStatus) => void;
+  'board:state': (payload: TBoardState) => void;
   'word:reveal': (payload: { position: number; char: string }) => void;
   pong: () => void;
 };

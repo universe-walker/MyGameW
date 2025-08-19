@@ -67,6 +67,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (solo && !this.engine.isRunning(roomId)) {
       this.engine.start(roomId);
     }
+    // Publish current board state to the newly joined client(s)
+    await this.engine.publishBoardState(roomId);
   }
 
   @SubscribeMessage('rooms:leave')
@@ -136,6 +138,16 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!payload?.roomId) return;
     const playerId = user?.id ?? 0; // allow Anon in dev
     this.engine.onHumanAnswer(payload.roomId, playerId, payload.text);
+  }
+
+  @SubscribeMessage('board:pick')
+  async onBoardPick(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { roomId: string; category: string; value: number },
+  ) {
+    void client; // no-op for now
+    if (!payload?.roomId || !payload?.category || typeof payload?.value !== 'number') return;
+    await this.engine.onBoardPick(payload.roomId, payload.category, payload.value);
   }
 
   @SubscribeMessage('ping')

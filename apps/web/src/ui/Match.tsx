@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../state/store';
+import { getSocket } from '../lib/socket';
 
 type Props = {
   onBuzzer: () => void;
@@ -17,6 +18,8 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
   const until = useGameStore((s) => s.until);
   const activePlayerId = useGameStore((s) => s.activePlayerId ?? null);
   const botStatuses = useGameStore((s) => s.botStatuses);
+  const board = useGameStore((s) => s.boardCategories);
+  const question = useGameStore((s) => s.question);
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -27,16 +30,25 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
   const remainingMs = until ? Math.max(0, until - now) : undefined;
 
   const grid = useMemo(() => {
-    // Placeholder 4x4 board
-    const cats = ['КОРТИЗОЛ', 'ВИРУСЫ', 'ТЕРМИНЫ', 'ХИРУРГИЯ'];
-    const costs = [100, 200, 300, 400];
+    const cats = board.map((c) => c.title);
+    // Collect unique values across categories, then sort asc
+    const valuesSet = new Set<number>();
+    board.forEach((c) => c.values.forEach((v) => valuesSet.add(v)));
+    const costs = Array.from(valuesSet).sort((a, b) => a - b);
     return { cats, costs };
-  }, []);
+  }, [board]);
 
   // My player id (first non-bot)
   const myId = useMemo(() => players.find((p) => !p.bot)?.id ?? 0, [players]);
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
   const canBuzz = phase === 'buzzer_window' && activePlayerId == null;
+  const canPick = phase === 'prepare' && !question;
+
+  const onPickCell = (category: string, value: number) => {
+    if (!roomId || !canPick) return;
+    const socket = getSocket();
+    (socket as any)?.emit('board:pick', { roomId, category, value });
+  };
 
   const [answer, setAnswer] = useState('');
   const submitAnswer = () => {
@@ -56,7 +68,7 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
         )}
       </div>
 
-      {/* Board placeholder */}
+      {/* Board */}
       <div className="grid grid-cols-4 gap-3">
         {grid.cats.map((c) => (
           <div key={c} className="rounded bg-indigo-900 text-white text-center py-2 font-semibold">
@@ -67,15 +79,24 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
           grid.cats.map((c) => (
             <button
               key={`${c}-${cost}`}
-              className="rounded bg-indigo-600 text-white py-4 text-lg hover:bg-indigo-700"
-              disabled
-              title="Скоро"
+              className={`rounded py-4 text-lg ${canPick ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+              disabled={!canPick || !board.find((bc) => bc.title === c)?.values.includes(cost)}
+              onClick={() => onPickCell(c, cost)}
+              title={canPick ? 'Выбрать вопрос' : 'Ожидание следующего хода'}
             >
               {cost}
             </button>
           )),
         )}
       </div>
+
+      {/* Question prompt */}
+      {question && (
+        <div className="p-3 rounded bg-yellow-50 border border-yellow-200">
+          <div className="text-xs text-yellow-700">{question.category} · {question.value}</div>
+          <div className="mt-1 text-lg">{question.prompt}</div>
+        </div>
+      )}
 
       {/* Controls (wire in App.tsx) */}
       <div className="flex items-center gap-2 flex-nowrap">

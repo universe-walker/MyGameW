@@ -3,6 +3,7 @@ import type { Server } from 'socket.io';
 import { TimerRegistryService } from './timer-registry.service';
 import { BotProfilesService } from './bot-profiles.service';
 import { TelemetryService } from './telemetry.service';
+import { PrismaService } from './prisma.service';
 
 export type Phase = 'idle' | 'prepare' | 'buzzer_window' | 'answer_wait' | 'score_apply' | 'round_end' | 'final';
 
@@ -11,6 +12,10 @@ type RoomRuntime = {
   phase: Phase;
   until?: number;
   activePlayerId?: number | null;
+  // Board state for the round
+  board?: { title: string; values: number[] }[];
+  // Current question info
+  question?: { category: string; value: number; prompt: string } | undefined;
 };
 
 @Injectable()
@@ -29,6 +34,7 @@ export class BotEngineService {
     private timers: TimerRegistryService,
     private profiles: BotProfilesService,
     private telemetry: TelemetryService,
+    private prisma: PrismaService,
   ) {}
 
   setServer(server: Server) {
@@ -45,6 +51,8 @@ export class BotEngineService {
     const now = Date.now();
     const rr: RoomRuntime = { running: true, phase: 'idle', until: undefined, activePlayerId: null };
     this.rooms.set(roomId, rr);
+    // Ensure board is loaded and emit to clients
+    void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
     this.goto(roomId, 'prepare', now + this.PREPARE_MS);
     this.timers.set(roomId, 'phase_prepare', this.PREPARE_MS, () => this.gotoBuzzer(roomId));
     this.telemetry.soloStarted(roomId);
@@ -94,17 +102,22 @@ export class BotEngineService {
     this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.cycleNext(roomId));
   }
 
-  private gotoBuzzer(roomId: string) {
+  private async gotoBuzzer(roomId: string) {
     const rr = this.rooms.get(roomId);
     if (!rr?.running) return;
-    rr.activePlayerId = null;
+    await this.ensureQuestionSelected(roomId);
+    const rrx = this.rooms.get(roomId);
+    if (!rrx?.running) return;
+    rrx.activePlayerId = null;
     this.goto(roomId, 'buzzer_window', Date.now() + this.BUZZER_WINDOW_MS);
     // Schedule bot buzzers
     this.scheduleBotBuzz(roomId);
     // End of window if nobody buzzed
     this.timers.set(roomId, 'phase_buzzer_window', this.BUZZER_WINDOW_MS, () => {
-      if (!this.rooms.get(roomId)?.activePlayerId) {
-        // No buzz; cycle again
+      const rry = this.rooms.get(roomId);
+      if (rry && !rry.activePlayerId) {
+        // No buzz; clear question and go back to prepare for next pick
+        rry.question = undefined;
         this.goto(roomId, 'prepare', Date.now() + this.PREPARE_MS);
         this.timers.set(roomId, 'phase_prepare', this.PREPARE_MS, () => this.gotoBuzzer(roomId));
       }
@@ -116,7 +129,11 @@ export class BotEngineService {
     if (!rr?.running) return;
     // Clear control before next round
     rr.activePlayerId = null;
+    // Clear current question
+    rr.question = undefined;
     // Simple loop back to prepare
+    // If board exhausted, reload
+    void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
     this.goto(roomId, 'prepare', Date.now() + this.PREPARE_MS);
     this.timers.set(roomId, 'phase_prepare', this.PREPARE_MS, () => this.gotoBuzzer(roomId));
   }
@@ -192,11 +209,98 @@ export class BotEngineService {
   private emitPhase(roomId: string, phase: Phase, until?: number) {
     const rr = this.rooms.get(roomId);
     const activePlayerId = rr?.activePlayerId ?? null;
-    this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId } as any);
+    const question = rr?.question ? { ...rr.question } : undefined;
+    this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId, question } as any);
   }
 
   private emitBotStatus(roomId: string, playerId: number, status: 'idle' | 'thinking' | 'buzzed' | 'answering' | 'passed' | 'wrong' | 'correct') {
     this.server?.to(roomId).emit('bot:status', { roomId, playerId, status, at: Date.now() } as any);
+  }
+
+  private emitBoardState(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    const categories = rr?.board ?? [];
+    this.server?.to(roomId).emit('board:state', { roomId, categories } as any);
+  }
+
+  private async ensureBoard(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr) return;
+    if (rr.board && rr.board.some((c) => c.values.length > 0)) return;
+    // Load first 4 categories with up to 5 values each
+    const cats = await this.prisma.category.findMany({
+      take: 4,
+      orderBy: { createdAt: 'asc' },
+      include: { questions: { select: { value: true }, orderBy: { value: 'asc' } } },
+    });
+    rr.board = cats.map((c: { title: string; questions: { value: number }[] }) => ({
+      title: c.title,
+      values: Array.from(new Set(c.questions.map((q: { value: number }) => q.value))).sort(
+        (a: number, b: number) => a - b,
+      ),
+    }));
+  }
+
+  private async ensureQuestionSelected(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr) return;
+    if (rr.question) return;
+    await this.ensureBoard(roomId);
+    const cat = rr.board?.find((c) => c.values.length > 0);
+    if (!cat) return;
+    const value = cat.values.sort((a, b) => a - b)[0];
+    // remove from board
+    cat.values = cat.values.filter((v) => v !== value);
+    this.emitBoardState(roomId);
+    // load prompt
+    const catRec = await this.prisma.category.findUnique({ where: { title: cat.title } });
+    if (catRec) {
+      const q = await this.prisma.question.findFirst({
+        where: { categoryId: catRec.id, value },
+        orderBy: { createdAt: 'asc' },
+        select: { prompt: true },
+      });
+      rr.question = { category: cat.title, value, prompt: q?.prompt || `${cat.title} — ${value}` };
+    } else {
+      rr.question = { category: cat.title, value, prompt: `${cat.title} — ${value}` };
+    }
+  }
+
+  async onBoardPick(roomId: string, categoryTitle: string, value: number) {
+    const rr = this.rooms.get(roomId);
+    if (!rr || !rr.running) return;
+    if (rr.phase !== 'prepare') return;
+    // Ensure board exists
+    await this.ensureBoard(roomId);
+    const cat = rr.board?.find((c) => c.title === categoryTitle);
+    if (!cat) return;
+    const idx = cat.values.findIndex((v) => v === value);
+    if (idx === -1) return; // already taken or invalid
+    // Remove from available
+    cat.values.splice(idx, 1);
+    this.emitBoardState(roomId);
+    // Load question prompt
+    const catRec = await this.prisma.category.findUnique({ where: { title: categoryTitle } });
+    if (catRec) {
+      const q = await this.prisma.question.findFirst({
+        where: { categoryId: catRec.id, value },
+        orderBy: { createdAt: 'asc' },
+        select: { prompt: true },
+      });
+      rr.question = { category: categoryTitle, value, prompt: q?.prompt || `${categoryTitle} — ${value}` };
+    } else {
+      rr.question = { category: categoryTitle, value, prompt: `${categoryTitle} — ${value}` };
+    }
+    // Move immediately to buzzer window for this question
+    // Clear any pending prepare timers to avoid duplicate transitions
+    this.timers.clearAll(roomId);
+    this.gotoBuzzer(roomId);
+  }
+
+  // Public helper to (re)send board state to clients (e.g., on join)
+  async publishBoardState(roomId: string) {
+    await this.ensureBoard(roomId);
+    this.emitBoardState(roomId);
   }
 
   private intFromEnv(name: string, fallback: number) {
