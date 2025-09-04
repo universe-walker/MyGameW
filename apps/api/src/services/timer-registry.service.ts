@@ -61,6 +61,10 @@ export class TimerRegistryService {
         console.error('Timer callback error for', roomId, key, e);
       }
     };
+    const existing = rt.timeouts.get(key);
+    if (existing) {
+      clearTimeout(existing);
+    }
     const h = setTimeout(wrapped, ms);
     rt.timeouts.set(key, h);
   }
