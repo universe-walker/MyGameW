@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Socket } from '@mygame/shared';
 import { useGameStore } from '../state/store';
 import { getSocket } from '../lib/socket';
 
@@ -119,8 +120,8 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
 
   const onPickCell = (category: string, value: number) => {
     if (!roomId || !canPick) return;
-    const socket = getSocket();
-    (socket as any)?.emit('board:pick', { roomId, category, value });
+    const socket: Socket | null = getSocket();
+    socket?.emit('board:pick', { roomId, category, value });
   };
 
   const [answer, setAnswer] = useState('');

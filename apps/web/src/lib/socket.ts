@@ -1,7 +1,11 @@
-import { io, Socket } from 'socket.io-client';
-import type { TSocketClientToServerEvents, TSocketServerToClientEvents } from '@mygame/shared';
+import { io } from 'socket.io-client';
+import type {
+  Socket,
+  TSocketClientToServerEvents,
+  TSocketServerToClientEvents,
+} from '@mygame/shared';
 
-let socket: Socket<TSocketServerToClientEvents, TSocketClientToServerEvents> | null = null;
+let socket: Socket | null = null;
 
 export function connectSocket(initDataRaw: string, userJson?: string) {
   const base =
@@ -10,7 +14,12 @@ export function connectSocket(initDataRaw: string, userJson?: string) {
   const nsUrl = `${base}${pathPrefix}/game`;
 
   if (socket) {
-    console.log('[socket] connectSocket: disconnect existing socket id=', (socket as any).id, 'connected=', (socket as any).connected);
+    console.log(
+      '[socket] connectSocket: disconnect existing socket id=',
+      socket.id,
+      'connected=',
+      socket.connected,
+    );
     socket.disconnect();
   }
 
@@ -20,31 +29,31 @@ export function connectSocket(initDataRaw: string, userJson?: string) {
     initDataRawLen: initDataRaw?.length ?? 0,
   });
 
-  socket = io(nsUrl, {
+  socket = io<TSocketServerToClientEvents, TSocketClientToServerEvents>(nsUrl, {
     transports: ['websocket'],
     auth: { initDataRaw, user: userJson },
   });
 
   // Lifecycle logging
-  (socket as any).on('connect', () => {
-    console.log('[socket] connect: id=', (socket as any).id);
+  socket.on('connect', () => {
+    console.log('[socket] connect: id=', socket.id);
   });
-  (socket as any).on('connect_error', (err: any) => {
+  socket.on('connect_error', (err) => {
     console.error('[socket] connect_error:', err?.message ?? err);
   });
-  (socket as any).on('error', (err: any) => {
+  socket.on('error', (err) => {
     console.error('[socket] error:', err);
   });
-  (socket as any).on('disconnect', (reason: any) => {
+  socket.on('disconnect', (reason) => {
     console.warn('[socket] disconnect:', reason);
   });
-  (socket as any).io?.on?.('reconnect_attempt', (n: number) => {
+  socket.io.on('reconnect_attempt', (n: number) => {
     console.log('[socket] reconnect_attempt:', n);
   });
-  (socket as any).io?.on?.('reconnect', (n: number) => {
+  socket.io.on('reconnect', (n: number) => {
     console.log('[socket] reconnect success after attempts:', n);
   });
-  (socket as any).io?.on?.('reconnect_error', (err: any) => {
+  socket.io.on('reconnect_error', (err) => {
     console.error('[socket] reconnect_error:', err?.message ?? err);
   });
 
@@ -57,7 +66,7 @@ export function getSocket() {
 
 export function disconnectSocket() {
   if (socket) {
-    console.log('[socket] disconnectSocket: id=', (socket as any).id, 'connected=', (socket as any).connected);
+    console.log('[socket] disconnectSocket: id=', socket.id, 'connected=', socket.connected);
     socket.disconnect();
     socket = null;
   }

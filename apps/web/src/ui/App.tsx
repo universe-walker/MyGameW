@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import type {
+  Socket,
+  TRoomState,
+  TGamePhaseEvent,
+  TBotStatus,
+  TBoardState,
+} from '@mygame/shared';
 import { getInitDataRaw, getStartParam, getUser } from '../lib/telegram';
 import { connectSocket, getSocket, disconnectSocket } from '../lib/socket';
 import { useGameStore } from '../state/store';
@@ -106,25 +113,25 @@ export function App() {
     }
   }, []);
 
-  const setupSocketListeners = (socket: any) => {
+  const setupSocketListeners = (socket: Socket) => {
     console.log('[socket] setupSocketListeners: attaching listeners');
-    (socket as any).off?.('room:state');
-    (socket as any).off?.('game:phase');
-    (socket as any).off?.('bot:status');
-    (socket as any).off?.('board:state');
-    (socket as any).on('room:state', (state: any) => {
+    socket.off('room:state');
+    socket.off('game:phase');
+    socket.off('bot:status');
+    socket.off('board:state');
+    socket.on('room:state', (state: TRoomState) => {
       console.log('[socket] event room:state', state);
       setRoom(state.roomId, state.players, Boolean(state.solo));
     });
-    (socket as any).on('game:phase', (p: any) => {
+    socket.on('game:phase', (p: TGamePhaseEvent) => {
       console.log('[socket] event game:phase', p);
       setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question);
     });
-    (socket as any).on('bot:status', (b: any) => {
+    socket.on('bot:status', (b: TBotStatus) => {
       console.log('[socket] event bot:status', b);
       setBotStatus(b.playerId, b.status);
     });
-    (socket as any).on('board:state', (b: any) => {
+    socket.on('board:state', (b: TBoardState) => {
       console.log('[socket] event board:state', b);
       if (Array.isArray(b?.categories)) setBoard(b.categories);
     });
@@ -152,7 +159,8 @@ export function App() {
       }
       const j = (await res.json()) as { roomId: string };
       console.log('[ui] onFindGame: /rooms ok -> join', j);
-      (socket as any).emit('rooms:join', { roomId: j.roomId });
+      if (!socket) return;
+      socket.emit('rooms:join', { roomId: j.roomId });
       console.log('[ui] onFindGame: emitted rooms:join', j.roomId);
     } catch (e) {
       console.error('[ui] onFindGame: error', e);
@@ -173,7 +181,8 @@ export function App() {
         socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
         setupSocketListeners(socket);
       }
-      (socket as any).emit('rooms:join', { roomId: pendingRoomId });
+      if (!socket) return;
+      socket.emit('rooms:join', { roomId: pendingRoomId });
       console.log('[ui] onJoinPendingRoom: emitted rooms:join', pendingRoomId);
       // Optionally clear hint once action taken
       setPendingRoomId(null);
@@ -205,7 +214,8 @@ export function App() {
       }
       const j = (await res.json()) as { roomId: string };
       console.log('[ui] onSoloGame: /rooms/solo ok -> join', j);
-      (socket as any).emit('rooms:join', { roomId: j.roomId });
+      if (!socket) return;
+      socket.emit('rooms:join', { roomId: j.roomId });
       console.log('[ui] onSoloGame: emitted rooms:join', j.roomId);
     } catch (e) {
       console.error('[ui] onSoloGame: error', e);
@@ -214,30 +224,30 @@ export function App() {
 
   const onBuzzer = () => {
     const socket = getSocket();
-    if (roomId && socket) (socket as any).emit('buzzer:press', { roomId });
+    if (roomId && socket) socket.emit('buzzer:press', { roomId });
   };
 
   const onAnswer = (text: string) => {
     const socket = getSocket();
     if (roomId && socket && text.trim()) {
-      (socket as any).emit('answer:submit', { roomId, text: text.trim() });
+      socket.emit('answer:submit', { roomId, text: text.trim() });
     }
   };
 
   const onPause = () => {
     if (!roomId) return;
     const socket = getSocket();
-    if (socket) (socket as any).emit('solo:pause', { roomId });
+    socket?.emit('solo:pause', { roomId });
   };
   const onResume = () => {
     if (!roomId) return;
     const socket = getSocket();
-    if (socket) (socket as any).emit('solo:resume', { roomId });
+    socket?.emit('solo:resume', { roomId });
   };
 
   const onLeave = () => {
     const socket = getSocket();
-    if (socket && roomId) (socket as any).emit('rooms:leave', { roomId });
+    if (socket && roomId) socket.emit('rooms:leave', { roomId });
     disconnectSocket();
     leaveRoom();
     setGameStarted(false);
