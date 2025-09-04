@@ -243,6 +243,19 @@ export class BotEngineService {
     }));
   }
 
+  private async loadQuestion(categoryTitle: string, value: number) {
+    const catRec = await this.prisma.category.findUnique({ where: { title: categoryTitle } });
+    if (catRec) {
+      const q = await this.prisma.question.findFirst({
+        where: { categoryId: catRec.id, value },
+        orderBy: { createdAt: 'asc' },
+        select: { prompt: true },
+      });
+      return { category: categoryTitle, value, prompt: q?.prompt || `${categoryTitle} — ${value}` };
+    }
+    return { category: categoryTitle, value, prompt: `${categoryTitle} — ${value}` };
+  }
+
   private async ensureQuestionSelected(roomId: string) {
     const rr = this.rooms.get(roomId);
     if (!rr) return;
@@ -255,17 +268,7 @@ export class BotEngineService {
     cat.values = cat.values.filter((v) => v !== value);
     this.emitBoardState(roomId);
     // load prompt
-    const catRec = await this.prisma.category.findUnique({ where: { title: cat.title } });
-    if (catRec) {
-      const q = await this.prisma.question.findFirst({
-        where: { categoryId: catRec.id, value },
-        orderBy: { createdAt: 'asc' },
-        select: { prompt: true },
-      });
-      rr.question = { category: cat.title, value, prompt: q?.prompt || `${cat.title} — ${value}` };
-    } else {
-      rr.question = { category: cat.title, value, prompt: `${cat.title} — ${value}` };
-    }
+    rr.question = await this.loadQuestion(cat.title, value);
   }
 
   async onBoardPick(roomId: string, categoryTitle: string, value: number) {
@@ -282,17 +285,7 @@ export class BotEngineService {
     cat.values.splice(idx, 1);
     this.emitBoardState(roomId);
     // Load question prompt
-    const catRec = await this.prisma.category.findUnique({ where: { title: categoryTitle } });
-    if (catRec) {
-      const q = await this.prisma.question.findFirst({
-        where: { categoryId: catRec.id, value },
-        orderBy: { createdAt: 'asc' },
-        select: { prompt: true },
-      });
-      rr.question = { category: categoryTitle, value, prompt: q?.prompt || `${categoryTitle} — ${value}` };
-    } else {
-      rr.question = { category: categoryTitle, value, prompt: `${categoryTitle} — ${value}` };
-    }
+    rr.question = await this.loadQuestion(categoryTitle, value);
     // Move immediately to buzzer window for this question
     // Clear any pending prepare timers to avoid duplicate transitions
     this.timers.clearAll(roomId);
