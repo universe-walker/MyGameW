@@ -24,6 +24,7 @@ export class BotEngineService {
   private rooms = new Map<string, RoomRuntime>();
   private botPlayerIds = new Map<string, Map<string, number>>();
   private nextBotId = new Map<string, number>();
+  private rng: () => number;
 
   // Config defaults (env overrides)
   private BUZZER_WINDOW_MS = this.intFromEnv('BUZZER_WINDOW_MS', 4500);
@@ -37,7 +38,11 @@ export class BotEngineService {
     private profiles: BotProfilesService,
     private telemetry: TelemetryService,
     private prisma: PrismaService,
-  ) {}
+  ) {
+    const seedEnv = process.env.BOT_RNG_SEED;
+    const seed = seedEnv ? Number(seedEnv) : undefined;
+    this.rng = typeof seed === 'number' && Number.isFinite(seed) ? this.seededRng(seed) : Math.random;
+  }
 
   setServer(server: Server) {
     this.server = server;
@@ -152,14 +157,16 @@ export class BotEngineService {
 
     for (const bot of bots) {
       const [min, max] = bot.buzzReactionMs;
-      const delay = Math.floor(min + Math.random() * (max - min));
+      const delay = Math.floor(min + this.rand() * (max - min));
       this.timers.set(roomId, `bot_buzz_${bot.code}`, delay, () => {
         const rrx = this.rooms.get(roomId);
         if (!rrx || rrx.phase !== 'buzzer_window' || rrx.activePlayerId) return;
-        // Decide if bot knows enough to buzz (very naive placeholder)
-        const pKnow = this.estimateKnow(bot);
-        const blind = Math.random() < bot.blindBuzzRate;
-        if (blind || Math.random() < pKnow) {
+        const category = rrx.question?.category ?? 'general';
+        const value = rrx.question?.value ?? 0;
+        const pKnow = this.estimateKnow(bot, category);
+        const pBuzz = this.answerProbability(pKnow, value, bot.riskProfile);
+        const blind = this.rand() < bot.blindBuzzRate;
+        if (blind || this.rand() < pBuzz) {
           const playerId = this.getBotPlayerId(roomId, bot.code);
           rrx.activePlayerId = playerId;
           this.emitBotStatus(roomId, playerId, 'buzzed');
@@ -170,7 +177,7 @@ export class BotEngineService {
           const thinkMs = this.intFromEnv('BOT_THINK_MS', 900);
           this.emitBotStatus(roomId, playerId, 'thinking');
           this.timers.set(roomId, `bot_answer_${playerId}`, thinkMs, () => {
-            const correct = Math.random() < Math.max(0.1, pKnow * (1 - bot.mistakeRate));
+            const correct = this.rand() < Math.max(0.1, pKnow * (1 - bot.mistakeRate));
             this.emitBotStatus(roomId, playerId, 'answering');
             this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
             this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.cycleNext(roomId));
@@ -182,11 +189,18 @@ export class BotEngineService {
     }
   }
 
-  private estimateKnow(bot: ReturnType<BotProfilesService['getAll']>[number]) {
-    // Placeholder: average knowledge and curve
-    const vals = Object.values(bot.knowledgeByTag);
-    const base = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0.5;
+  private estimateKnow(bot: ReturnType<BotProfilesService['getAll']>[number], category: string) {
+    const byTag = bot.knowledgeByTag;
+    const vals = Object.values(byTag);
+    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0.5;
+    const base = byTag[category] ?? byTag['general'] ?? avg;
     return bot.valueCurve === 'steep' ? Math.min(1, base * 1.1) : base;
+  }
+
+  private answerProbability(pKnow: number, value: number, risk: ReturnType<BotProfilesService['getAll']>[number]['riskProfile']) {
+    const riskFactor = { low: 0.6, mid: 0.8, high: 1 }[risk];
+    const valueFactor = 1 - Math.min(0.5, value / 2000);
+    return Math.min(1, Math.max(0, pKnow * riskFactor * valueFactor));
   }
 
   private getBotPlayerId(roomId: string, botCode: string): number {
@@ -307,6 +321,25 @@ export class BotEngineService {
   async publishBoardState(roomId: string) {
     await this.ensureBoard(roomId);
     this.emitBoardState(roomId);
+  }
+
+  setSeed(seed: number) {
+    this.rng = this.seededRng(seed);
+  }
+
+  private rand() {
+    return this.rng();
+  }
+
+  private seededRng(seed: number) {
+    let a = seed | 0;
+    return () => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   }
 
   private intFromEnv(name: string, fallback: number) {
