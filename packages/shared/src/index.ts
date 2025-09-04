@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Socket as IOSocket } from 'socket.io-client';
 
 export const ZInitVerifyReq = z.object({ initDataRaw: z.string().min(1) });
 export const ZInitVerifyRes = z.object({
@@ -123,5 +124,8 @@ export type TSocketServerToClientEvents = {
   'word:reveal': (payload: { position: number; char: string }) => void;
   pong: () => void;
 };
+
+// Fully-typed socket shared across client and server
+export type Socket = IOSocket<TSocketServerToClientEvents, TSocketClientToServerEvents>;
 
 
