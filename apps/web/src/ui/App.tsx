@@ -1,70 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import type {
-  Socket,
-  TRoomState,
-  TGamePhaseEvent,
-  TBotStatus,
-  TBoardState,
-} from '@mygame/shared';
 import { getInitDataRaw, getStartParam, getUser } from '../lib/telegram';
-import { connectSocket, getSocket, disconnectSocket } from '../lib/socket';
+import { fetchApi, apiBase } from '../lib/api';
+import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../state/store';
 import { useUiHome } from '../state/ui';
 import { Match } from './Match';
 import DebugConsole from './DebugConsole';
+import ShopModal from './ShopModal';
+import AchievementsModal from './AchievementsModal';
 
 export function App() {
   const [verified, setVerified] = useState(false);
-  const setRoom = useGameStore((s) => s.setRoom);
-  const setPhase = useGameStore((s) => s.setPhase);
-  const setBoard = useGameStore((s) => s.setBoard);
-  const setBotStatus = useGameStore((s) => s.setBotStatus);
   const roomId = useGameStore((s) => s.roomId);
   const solo = useGameStore((s) => s.solo);
-  const players = useGameStore((s) => s.players);
-  const phase = useGameStore((s) => s.phase);
-  const until = useGameStore((s) => s.until);
-  const botStatuses = useGameStore((s) => s.botStatuses);
   const leaveRoom = useGameStore((s) => s.leaveRoom);
   const { shopOpen, achievementsOpen, openShop, closeShop, openAchievements, closeAchievements } = useUiHome();
   const [profileScore, setProfileScore] = useState<number>(0);
   const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
-  const [gameStarted, setGameStarted] = useState(false);
+  const [, setGameStarted] = useState(false);
 
-  const apiBase = useMemo(
-    () => import.meta.env.VITE_API_BASE_URL || (window as any).API_BASE_URL || 'http://localhost:4000',
-    [],
-  );
-
-  const showDebugConsole = useMemo(() => {
+  const showDebugConsole = (() => {
     const mode = (import.meta as any).env?.MODE as string | undefined;
     const flag = (import.meta as any).env?.VITE_DEBUG_CONSOLE as string | undefined;
     // Defaults: dev -> ON, prod -> OFF. Can override via VITE_DEBUG_CONSOLE.
     if (flag === 'true') return true;
     if (flag === 'false') return false;
     return mode !== 'production';
-  }, []);
+  })();
 
-  // Helper: fetch with fallback to '/api' prefix if the first request returns 404 or errors
-  const fetchApi = async (path: string, init?: RequestInit) => {
-    const primary = `${apiBase}${path}`;
-    try {
-      const r = await fetch(primary, init);
-      if (r.status !== 404) return r;
-      console.warn('[api] 404 on', primary, '-> trying /api prefix');
-    } catch (e) {
-      console.warn('[api] error on', primary, e, '-> trying /api prefix');
-    }
-    const secondary = `${apiBase}/api${path}`;
-    try {
-      const r2 = await fetch(secondary, init);
-      return r2;
-    } catch (e2) {
-      console.error('[api] error on', secondary, e2);
-      throw e2;
-    }
-  };
+  const { connect, disconnect, getSocket } = useSocket();
 
   const verify = useMutation({
     mutationFn: async (initDataRaw: string) => {
@@ -94,7 +59,7 @@ export function App() {
         console.error('[health] GET /healthz failed', e);
       }
     })();
-    
+
     const urlStartParam = new URLSearchParams(location.search).get('start_param');
     const start = getStartParam() ?? urlStartParam;
     if (start && start.startsWith('room_')) {
@@ -113,43 +78,11 @@ export function App() {
     }
   }, []);
 
-  const setupSocketListeners = (socket: Socket) => {
-    console.log('[socket] setupSocketListeners: attaching listeners');
-    socket.off('room:state');
-    socket.off('game:phase');
-    socket.off('bot:status');
-    socket.off('board:state');
-    socket.on('room:state', (state: TRoomState) => {
-      console.log('[socket] event room:state', state);
-      setRoom(state.roomId, state.players, Boolean(state.solo));
-    });
-    socket.on('game:phase', (p: TGamePhaseEvent) => {
-      console.log('[socket] event game:phase', p);
-      setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question);
-    });
-    socket.on('bot:status', (b: TBotStatus) => {
-      console.log('[socket] event bot:status', b);
-      setBotStatus(b.playerId, b.status);
-    });
-    socket.on('board:state', (b: TBoardState) => {
-      console.log('[socket] event board:state', b);
-      if (Array.isArray(b?.categories)) setBoard(b.categories);
-    });
-  };
-
   const onFindGame = async () => {
     console.log('[ui] onFindGame: click');
     setGameStarted(true);
     try {
-      let socket = getSocket();
-      console.log('[ui] onFindGame: existing socket?', Boolean(socket));
-      if (!socket) {
-        const initDataRaw = getInitDataRaw() ?? '';
-        const user = getUser();
-        console.log('[ui] onFindGame: connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
-        socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-        setupSocketListeners(socket);
-      }
+      const socket = connect();
       console.log('[ui] onFindGame: POST /rooms');
       const res = await fetchApi(`/rooms`, { method: 'POST' });
       if (!res.ok) {
@@ -159,8 +92,7 @@ export function App() {
       }
       const j = (await res.json()) as { roomId: string };
       console.log('[ui] onFindGame: /rooms ok -> join', j);
-      if (!socket) return;
-      socket.emit('rooms:join', { roomId: j.roomId });
+      socket?.emit('rooms:join', { roomId: j.roomId });
       console.log('[ui] onFindGame: emitted rooms:join', j.roomId);
     } catch (e) {
       console.error('[ui] onFindGame: error', e);
@@ -172,19 +104,9 @@ export function App() {
     console.log('[ui] onJoinPendingRoom: join', pendingRoomId);
     setGameStarted(true);
     try {
-      let socket = getSocket();
-      console.log('[ui] onJoinPendingRoom: existing socket?', Boolean(socket));
-      if (!socket) {
-        const initDataRaw = getInitDataRaw() ?? '';
-        const user = getUser();
-        console.log('[ui] onJoinPendingRoom: connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
-        socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-        setupSocketListeners(socket);
-      }
-      if (!socket) return;
-      socket.emit('rooms:join', { roomId: pendingRoomId });
+      const socket = connect();
+      socket?.emit('rooms:join', { roomId: pendingRoomId });
       console.log('[ui] onJoinPendingRoom: emitted rooms:join', pendingRoomId);
-      // Optionally clear hint once action taken
       setPendingRoomId(null);
     } catch (e) {
       console.error('[ui] onJoinPendingRoom: error', e);
@@ -196,15 +118,7 @@ export function App() {
     console.log('[ui] onSoloGame: click');
     setGameStarted(true);
     try {
-      let socket = getSocket();
-      console.log('[ui] onSoloGame: existing socket?', Boolean(socket));
-      if (!socket) {
-        const initDataRaw = getInitDataRaw() ?? '';
-        const user = getUser();
-        console.log('[ui] onSoloGame: connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
-        socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-        setupSocketListeners(socket);
-      }
+      const socket = connect();
       console.log('[ui] onSoloGame: POST /rooms/solo');
       const res = await fetchApi(`/rooms/solo`, { method: 'POST' });
       if (!res.ok) {
@@ -214,8 +128,7 @@ export function App() {
       }
       const j = (await res.json()) as { roomId: string };
       console.log('[ui] onSoloGame: /rooms/solo ok -> join', j);
-      if (!socket) return;
-      socket.emit('rooms:join', { roomId: j.roomId });
+      socket?.emit('rooms:join', { roomId: j.roomId });
       console.log('[ui] onSoloGame: emitted rooms:join', j.roomId);
     } catch (e) {
       console.error('[ui] onSoloGame: error', e);
@@ -248,19 +161,10 @@ export function App() {
   const onLeave = () => {
     const socket = getSocket();
     if (socket && roomId) socket.emit('rooms:leave', { roomId });
-    disconnectSocket();
+    disconnect();
     leaveRoom();
     setGameStarted(false);
   };
-
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (!until) return;
-    const id = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(id);
-  }, [until]);
-
-  const remainingMs = until ? Math.max(0, until - now) : undefined;
 
   return (
     <div className="min-h-full flex flex-col p-4">
@@ -307,39 +211,9 @@ export function App() {
         </div>
       )}
 
-      {/* Modals (simple placeholders) */}
-      {shopOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center" onClick={closeShop}>
-          <div className="bg-white rounded p-4 w-80" onClick={(e) => e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-2">Подсказки</div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div>Открыть 1 букву</div>
-                <button className="px-3 py-1 rounded bg-blue-600 text-white">Купить</button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>Пакет 2 буквы</div>
-                <button className="px-3 py-1 rounded bg-blue-600 text-white">Купить</button>
-              </div>
-            </div>
-            <button className="mt-4 w-full py-2 rounded bg-gray-200" onClick={closeShop}>
-              Закрыть
-            </button>
-          </div>
-        </div>
-      )}
-
-      {achievementsOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center" onClick={closeAchievements}>
-          <div className="bg-white rounded p-4 w-96" onClick={(e) => e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-2">Достижения</div>
-            <div className="text-sm text-gray-500">Скоро здесь будет список бейджей и прогресс.</div>
-            <button className="mt-4 w-full py-2 rounded bg-gray-200" onClick={closeAchievements}>
-              Закрыть
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Modals */}
+      <ShopModal open={shopOpen} onClose={closeShop} />
+      <AchievementsModal open={achievementsOpen} onClose={closeAchievements} />
       {showDebugConsole && <DebugConsole />}
     </div>
   );
