@@ -22,6 +22,8 @@ type RoomRuntime = {
 export class BotEngineService {
   private server: Server | null = null;
   private rooms = new Map<string, RoomRuntime>();
+  private botPlayerIds = new Map<string, Map<string, number>>();
+  private nextBotId = new Map<string, number>();
 
   // Config defaults (env overrides)
   private BUZZER_WINDOW_MS = this.intFromEnv('BUZZER_WINDOW_MS', 4500);
@@ -64,6 +66,8 @@ export class BotEngineService {
     rr.running = false;
     this.timers.clearAll(roomId);
     this.rooms.delete(roomId);
+    this.botPlayerIds.delete(roomId);
+    this.nextBotId.delete(roomId);
   }
 
   pause(roomId: string) {
@@ -156,8 +160,7 @@ export class BotEngineService {
         const pKnow = this.estimateKnow(bot);
         const blind = Math.random() < bot.blindBuzzRate;
         if (blind || Math.random() < pKnow) {
-          const playerId = this.findBotPlayerId(roomId, bot.code);
-          if (!playerId) return;
+          const playerId = this.getBotPlayerId(roomId, bot.code);
           rrx.activePlayerId = playerId;
           this.emitBotStatus(roomId, playerId, 'buzzed');
           this.telemetry.botBuzz(roomId, playerId);
@@ -186,10 +189,18 @@ export class BotEngineService {
     return bot.valueCurve === 'steep' ? Math.min(1, base * 1.1) : base;
   }
 
-  private findBotPlayerId(roomId: string, _botCode: string): number | null {
-    // For MVP, negative IDs are bots; pick -1 by convention.
-    // Gateway adds bots with -1, -2, ...
-    return -1;
+  private getBotPlayerId(roomId: string, botCode: string): number {
+    let map = this.botPlayerIds.get(roomId);
+    if (!map) {
+      map = new Map();
+      this.botPlayerIds.set(roomId, map);
+    }
+    const existing = map.get(botCode);
+    if (typeof existing === 'number') return existing;
+    const next = this.nextBotId.get(roomId) ?? -1;
+    map.set(botCode, next);
+    this.nextBotId.set(roomId, next - 1);
+    return next;
   }
 
   private pickBotsForRoom(_roomId: string) {
