@@ -1,25 +1,11 @@
-const apiBase =
+const base =
   import.meta.env.VITE_API_BASE_URL ||
   (window as any).API_BASE_URL ||
   'http://localhost:4000';
+const prefix = ((import.meta as any).env?.VITE_API_PATH_PREFIX || (window as any).API_PATH_PREFIX || '') as string;
+
+export const apiBase = `${base}${prefix}`;
 
 export async function fetchApi(path: string, init?: RequestInit) {
-  const primary = `${apiBase}${path}`;
-  try {
-    const r = await fetch(primary, init);
-    if (r.status !== 404) return r;
-    console.warn('[api] 404 on', primary, '-> trying /api prefix');
-  } catch (e) {
-    console.warn('[api] error on', primary, e, '-> trying /api prefix');
-  }
-  const secondary = `${apiBase}/api${path}`;
-  try {
-    const r2 = await fetch(secondary, init);
-    return r2;
-  } catch (e2) {
-    console.error('[api] error on', secondary, e2);
-    throw e2;
-  }
+  return fetch(`${apiBase}${path}`, init);
 }
-
-export { apiBase };

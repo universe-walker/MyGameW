@@ -4,6 +4,7 @@ import { Board } from './Board';
 import { QuestionPrompt } from './QuestionPrompt';
 import { Controls } from './Controls';
 import { Scoreboard } from './Scoreboard';
+import { getUser } from '../lib/telegram';
 
 type Props = {
   onBuzzer: () => void;
@@ -32,8 +33,12 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
   }, [until]);
   const remainingMs = until ? Math.max(0, until - now) : undefined;
 
-  // My player id (first non-bot)
-  const myId = useMemo(() => players.find((p) => !p.bot)?.id ?? 0, [players]);
+  // My player id: use Telegram user id if available, fallback to first non-bot
+  const myId = useMemo(() => {
+    const uid = getUser()?.id;
+    if (uid != null) return uid;
+    return players.find((p) => !p.bot)?.id ?? 0;
+  }, [players]);
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
   const canBuzz = phase === 'buzzer_window' && activePlayerId == null;
   const canPick = phase === 'prepare' && !question;

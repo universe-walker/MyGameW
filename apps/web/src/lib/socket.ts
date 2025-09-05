@@ -4,14 +4,12 @@ import type {
   TSocketClientToServerEvents,
   TSocketServerToClientEvents,
 } from '@mygame/shared';
+import { apiBase } from './api';
 
 let socket: Socket | null = null;
 
 export function connectSocket(initDataRaw: string, userJson?: string) {
-  const base =
-    import.meta.env.VITE_API_BASE_URL || (window as any).API_BASE_URL || 'http://localhost:4000';
-  const pathPrefix = (import.meta as any).env?.VITE_API_PATH_PREFIX || (window as any).API_PATH_PREFIX || '';
-  const nsUrl = `${base}${pathPrefix}/game`;
+  const nsUrl = `${apiBase}/game`;
 
   if (socket) {
     console.log(
@@ -31,7 +29,7 @@ export function connectSocket(initDataRaw: string, userJson?: string) {
 
   socket = io<TSocketServerToClientEvents, TSocketClientToServerEvents>(nsUrl, {
     transports: ['websocket'],
-    auth: { initDataRaw, user: userJson },
+    auth: { initDataRaw },
   });
 
   // Lifecycle logging

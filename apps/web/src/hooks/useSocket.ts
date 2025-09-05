@@ -38,6 +38,15 @@ function setupSocketListeners(
     console.log('[socket] event board:state', b);
     if (Array.isArray(b?.categories)) setBoard(b.categories);
   });
+
+  // Auto rejoin the room on (re)connect if we have one
+  socket.on('connect', () => {
+    const rid = useGameStore.getState().roomId;
+    if (rid) {
+      console.log('[socket] connect: auto rejoin room', rid);
+      socket.emit('rooms:join', { roomId: rid });
+    }
+  });
 }
 
 export function useSocket() {
