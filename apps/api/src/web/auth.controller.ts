@@ -43,9 +43,8 @@ export class AuthController {
     const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
     const res = verifyInitData(initDataRaw, botToken);
     if (!res.ok) throw new BadRequestException('Invalid initData');
-    const url = new URLSearchParams(initDataRaw);
-    const userEncoded = url.get('user');
-    const userJson = userEncoded ? decodeURIComponent(userEncoded) : null;
+    const data = parseInitData(initDataRaw);
+    const userJson = data.user ? decodeURIComponent(data.user) : null;
     const user = userJson
       ? (JSON.parse(userJson) as { id: number; username?: string; first_name: string })
       : null;
