@@ -1,9 +1,16 @@
 import { create } from 'zustand';
 
-type Player = { id: number; name: string; bot?: boolean };
-type Phase = 'idle' | 'prepare' | 'buzzer_window' | 'answer_wait' | 'score_apply' | 'round_end' | 'final';
-type BoardCategory = { title: string; values: number[] };
-type CurrentQuestion = { category: string; value: number; prompt: string } | undefined;
+export type Player = { id: number; name: string; bot?: boolean };
+export type Phase =
+  | 'idle'
+  | 'prepare'
+  | 'buzzer_window'
+  | 'answer_wait'
+  | 'score_apply'
+  | 'round_end'
+  | 'final';
+export type BoardCategory = { title: string; values: number[] };
+export type CurrentQuestion = { category: string; value: number; prompt: string };
 
 type State = {
   roomId: string | null;
