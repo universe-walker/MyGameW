@@ -28,7 +28,7 @@ function setupSocketListeners(
   });
   socket.on('game:phase', (p: TGamePhaseEvent) => {
     console.log('[socket] event game:phase', p);
-    setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question);
+    setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question, p.scores as any);
   });
   socket.on('bot:status', (b: TBotStatus) => {
     console.log('[socket] event bot:status', b);

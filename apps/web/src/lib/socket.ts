@@ -29,7 +29,7 @@ export function connectSocket(initDataRaw: string, userJson?: string) {
 
   socket = io<TSocketServerToClientEvents, TSocketClientToServerEvents>(nsUrl, {
     transports: ['websocket'],
-    auth: { initDataRaw },
+    auth: { initDataRaw, user: userJson },
   });
 
   // Lifecycle logging

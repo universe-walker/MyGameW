@@ -105,7 +105,7 @@ export function Board({ roomId, board, canPick }: BoardProps) {
           {grid.costs.map((cost) => (
             <button
               key={`${c}-${cost}`}
-              className={`rounded py-4 text-lg ${
+              className={`rounded py-4 text-lg disabled:opacity-60 disabled:line-through ${
                 canPick
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : 'bg-gray-300 text-gray-600 cursor-not-allowed'

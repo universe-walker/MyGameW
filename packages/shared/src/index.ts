@@ -83,6 +83,8 @@ export const ZGamePhaseEvent = z.object({
   question: z
     .object({ category: z.string(), value: z.number().int(), prompt: z.string() })
     .optional(),
+  // Optional: current scores by playerId
+  scores: z.record(z.string(), z.number().int()).optional(),
 });
 export const ZBotStatus = z.object({
   roomId: z.string().uuid(),

@@ -16,6 +16,8 @@ type RoomRuntime = {
   board?: { title: string; values: number[] }[];
   // Current question info
   question?: { category: string; value: number; prompt: string } | undefined;
+  // Scoreboard for the room (playerId -> score)
+  scores?: Record<number, number>;
 };
 
 @Injectable()
@@ -56,7 +58,7 @@ export class BotEngineService {
   start(roomId: string) {
     if (this.isRunning(roomId)) return;
     const now = Date.now();
-    const rr: RoomRuntime = { running: true, phase: 'idle', until: undefined, activePlayerId: null };
+    const rr: RoomRuntime = { running: true, phase: 'idle', until: undefined, activePlayerId: null, scores: {} };
     this.rooms.set(roomId, rr);
     // Ensure board is loaded and emit to clients
     void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
@@ -228,6 +230,15 @@ export class BotEngineService {
     if (!rr) return;
     rr.phase = phase;
     rr.until = until;
+    // Simple scoring: award question value to the active player when entering score_apply
+    if (phase === 'score_apply') {
+      const pid = rr.activePlayerId;
+      const val = rr.question?.value ?? 0;
+      if (pid != null && typeof val === 'number' && val > 0) {
+        rr.scores = rr.scores || {};
+        rr.scores[pid] = (rr.scores[pid] ?? 0) + val;
+      }
+    }
     this.emitPhase(roomId, phase, until);
   }
 
@@ -235,7 +246,8 @@ export class BotEngineService {
     const rr = this.rooms.get(roomId);
     const activePlayerId = rr?.activePlayerId ?? null;
     const question = rr?.question ? { ...rr.question } : undefined;
-    this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId, question } as any);
+    const scores = rr?.scores ? { ...rr.scores } : undefined;
+    this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId, question, scores } as any);
   }
 
   private emitBotStatus(roomId: string, playerId: number, status: 'idle' | 'thinking' | 'buzzed' | 'answering' | 'passed' | 'wrong' | 'correct') {

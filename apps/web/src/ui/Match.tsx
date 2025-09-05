@@ -24,6 +24,7 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
   const botStatuses = useGameStore((s) => s.botStatuses);
   const board = useGameStore((s) => s.boardCategories);
   const question = useGameStore((s) => s.question);
+  const scores = useGameStore((s) => s.scores);
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -73,6 +74,7 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
         players={players}
         botStatuses={botStatuses}
         isMyTurnToAnswer={isMyTurnToAnswer}
+        scores={scores}
       />
     </div>
   );
