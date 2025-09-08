@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { __test__ } from '../src/web/auth.controller';
+import { verifyInitData } from '../src/services/telegram-auth.util';
 
 describe('verifyInitData', () => {
   it('validates correct HMAC and not expired', async () => {
@@ -22,7 +22,7 @@ describe('verifyInitData', () => {
     const hash = crypto.createHmac('sha256', secret).update(entries).digest('hex');
     params.set('hash', hash);
     const initDataRaw = params.toString();
-    const res = __test__.verifyInitData(initDataRaw, token);
+    const res = verifyInitData(initDataRaw, token);
     expect(res.ok).toBe(true);
   });
 
@@ -33,7 +33,7 @@ describe('verifyInitData', () => {
     const params = new URLSearchParams({ auth_date: String(auth_date), query_id: 'q', user });
     params.set('hash', 'deadbeef');
     const initDataRaw = params.toString();
-    const res = __test__.verifyInitData(initDataRaw, token);
+    const res = verifyInitData(initDataRaw, token);
     expect(res.ok).toBe(false);
   });
 
@@ -57,7 +57,7 @@ describe('verifyInitData', () => {
     const hash = crypto.createHmac('sha256', secret).update(entries).digest('hex');
     params.set('hash', hash);
     const initDataRaw = params.toString();
-    const res = __test__.verifyInitData(initDataRaw, token);
+    const res = verifyInitData(initDataRaw, token);
     expect(res.ok).toBe(false);
   });
 });

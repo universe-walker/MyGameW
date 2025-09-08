@@ -2,7 +2,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 // Update ngrokHost to your current ngrok subdomain if it changes
-const ngrokHost = process.env.NGROK_HOST || '9671c34cb909.ngrok-free.app';
+const ngrokHost = process.env.NGROK_HOST || '131d23c6facb.ngrok-free.app';
 
 export default defineConfig({
   plugins: [react()],

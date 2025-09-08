@@ -18,6 +18,8 @@ type RoomRuntime = {
   question?: { category: string; value: number; prompt: string } | undefined;
   // Scoreboard for the room (playerId -> score)
   scores?: Record<number, number>;
+  // Whether the last submitted answer (by activePlayerId) was correct
+  lastAnswerCorrect?: boolean;
 };
 
 @Injectable()
@@ -31,7 +33,16 @@ export class BotEngineService {
   // Config defaults (env overrides)
   private BUZZER_WINDOW_MS = this.intFromEnv('BUZZER_WINDOW_MS', 4500);
   private PREPARE_MS = this.intFromEnv('PREPARE_MS', 1500);
-  private ANSWER_WAIT_MS = this.intFromEnv('ANSWER_WAIT_MS', 9000);
+  // Solo mode answer timeouts
+  // Backward-compat: if specific HUMAN/BOT vars are not provided, fall back to ANSWER_WAIT_MS
+  private ANSWER_WAIT_HUMAN_MS = this.intFromEnv(
+    'ANSWER_WAIT_HUMAN_MS',
+    this.intFromEnv('ANSWER_WAIT_MS', 30000),
+  );
+  private ANSWER_WAIT_BOT_MS = this.intFromEnv(
+    'ANSWER_WAIT_BOT_MS',
+    this.intFromEnv('ANSWER_WAIT_MS', 15000),
+  );
   private SCORE_APPLY_MS = this.intFromEnv('SCORE_APPLY_MS', 1000);
   private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', false);
 
@@ -91,9 +102,9 @@ export class BotEngineService {
     if (!rr || rr.phase !== 'buzzer_window' || rr.activePlayerId) return;
     rr.activePlayerId = playerId;
     this.emitBotStatus(roomId, playerId, 'buzzed');
-    // Transition to answer wait immediately
-    this.goto(roomId, 'answer_wait', Date.now() + this.ANSWER_WAIT_MS);
-    this.timers.set(roomId, 'phase_answer_wait', this.ANSWER_WAIT_MS, () => {
+    // Transition to answer wait immediately (human gets longer window)
+    this.goto(roomId, 'answer_wait', Date.now() + this.ANSWER_WAIT_HUMAN_MS);
+    this.timers.set(roomId, 'phase_answer_wait', this.ANSWER_WAIT_HUMAN_MS, () => {
       const rrx = this.rooms.get(roomId);
       // Guard against early human answer changing phase before this fires
       if (!rrx || rrx.phase !== 'answer_wait' || rrx.activePlayerId !== playerId) return;
@@ -103,12 +114,39 @@ export class BotEngineService {
     });
   }
 
-  onHumanAnswer(roomId: string, playerId: number, _text: string) {
+  async onHumanAnswer(roomId: string, playerId: number, text: string) {
     const rr = this.rooms.get(roomId);
     if (!rr || rr.phase !== 'answer_wait') return;
     // Only the active player can answer
     if (rr.activePlayerId !== playerId) return;
-    // For MVP: don't evaluate correctness; proceed to score apply
+    // Evaluate correctness from DB metadata when possible
+    let correct = false;
+    try {
+      const q = rr.question;
+      if (q?.category && typeof q.value === 'number') {
+        const catRec = await this.prisma.category.findUnique({ where: { title: q.category } });
+        if (catRec) {
+          const qr = await this.prisma.question.findFirst({
+            where: { categoryId: catRec.id, value: q.value },
+            select: { canonicalAnswer: true, answersAccept: true, answersReject: true, requireFull: true },
+          });
+          const normalized = this.normalizeAnswer(text);
+          const accepts = (qr?.answersAccept ?? []).map((s) => this.normalizeAnswer(s));
+          const rejects = (qr?.answersReject ?? []).map((s) => this.normalizeAnswer(s));
+          const canonical = this.normalizeAnswer(qr?.canonicalAnswer ?? '');
+          const requireFull = Boolean(qr?.requireFull);
+          if (normalized.length > 0) {
+            if (rejects.includes(normalized)) correct = false;
+            else if (requireFull) correct = accepts.includes(normalized) || (!!canonical && normalized === canonical);
+            else correct = accepts.includes(normalized) || (!!canonical && normalized === canonical);
+          }
+        }
+      }
+    } catch {
+      // Fallback: treat non-empty as correct when DB lookup fails
+      correct = typeof text === 'string' && text.trim().length > 0;
+    }
+    rr.lastAnswerCorrect = correct;
     this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
     this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.cycleNext(roomId));
   }
@@ -173,19 +211,21 @@ export class BotEngineService {
           rrx.activePlayerId = playerId;
           this.emitBotStatus(roomId, playerId, 'buzzed');
           this.telemetry.botBuzz(roomId, playerId);
-          // Transition to answer wait
-          this.goto(roomId, 'answer_wait', Date.now() + this.ANSWER_WAIT_MS);
+          // Transition to answer wait (bots get a shorter window)
+          this.goto(roomId, 'answer_wait', Date.now() + this.ANSWER_WAIT_BOT_MS);
           // Schedule bot think and answer
           const thinkMs = this.intFromEnv('BOT_THINK_MS', 900);
           this.emitBotStatus(roomId, playerId, 'thinking');
           this.timers.set(roomId, `bot_answer_${playerId}`, thinkMs, () => {
             const correct = this.rand() < Math.max(0.1, pKnow * (1 - bot.mistakeRate));
-            this.emitBotStatus(roomId, playerId, 'answering');
-            this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
-            this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.cycleNext(roomId));
-            this.emitBotStatus(roomId, playerId, correct ? 'correct' : 'wrong');
-            this.telemetry.botAnswer(roomId, playerId, correct ? 'correct' : 'wrong');
-          });
+          this.emitBotStatus(roomId, playerId, 'answering');
+          const rr2 = this.rooms.get(roomId);
+          if (rr2) rr2.lastAnswerCorrect = correct;
+          this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
+          this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.cycleNext(roomId));
+          this.emitBotStatus(roomId, playerId, correct ? 'correct' : 'wrong');
+          this.telemetry.botAnswer(roomId, playerId, correct ? 'correct' : 'wrong');
+        });
         }
       });
     }
@@ -230,13 +270,18 @@ export class BotEngineService {
     if (!rr) return;
     rr.phase = phase;
     rr.until = until;
-    // Simple scoring: award question value to the active player when entering score_apply
+    // Scoring: adjust score when entering score_apply
     if (phase === 'score_apply') {
       const pid = rr.activePlayerId;
       const val = rr.question?.value ?? 0;
       if (pid != null && typeof val === 'number' && val > 0) {
         rr.scores = rr.scores || {};
-        rr.scores[pid] = (rr.scores[pid] ?? 0) + val;
+        if (typeof rr.lastAnswerCorrect === 'boolean') {
+          const delta = rr.lastAnswerCorrect ? val : -val;
+          rr.scores[pid] = (rr.scores[pid] ?? 0) + delta;
+        }
+        // reset correctness flag after applying (or skipping if undefined)
+        rr.lastAnswerCorrect = undefined;
       }
     }
     this.emitPhase(roomId, phase, until);
@@ -298,11 +343,14 @@ export class BotEngineService {
     if (!rr) return;
     if (rr.question) return;
     await this.ensureBoard(roomId);
-    const cat = rr.board?.find((c) => c.values.length > 0);
-    if (!cat) return;
-    const value = cat.values.sort((a, b) => a - b)[0];
+    const candidates = (rr.board ?? []).filter((c) => c.values.length > 0);
+    if (!candidates.length) return;
+    // Pick a random category and a random available value within it
+    const cat = candidates[Math.floor(this.rand() * candidates.length)];
+    const vIdx = Math.floor(this.rand() * cat.values.length);
+    const value = cat.values[vIdx];
     // remove from board
-    cat.values = cat.values.filter((v) => v !== value);
+    cat.values = cat.values.filter((v, i) => i !== vIdx);
     this.emitBoardState(roomId);
     // load prompt
     rr.question = await this.loadQuestion(cat.title, value);
@@ -341,6 +389,15 @@ export class BotEngineService {
 
   private rand() {
     return this.rng();
+  }
+
+  private normalizeAnswer(s: string | null | undefined) {
+    const t = (s ?? '').toString().toLowerCase();
+    return t
+      .normalize('NFKD')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private seededRng(seed: number) {

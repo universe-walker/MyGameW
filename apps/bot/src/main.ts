@@ -18,17 +18,49 @@ console.log(`- API_BASE_URL: ${API_BASE_URL}`);
 
 const bot = new Bot(botToken);
 
+// Global error handler to keep bot alive on unexpected errors
+bot.catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('[bot] Unhandled error:', (err as any)?.error ?? err);
+});
+
+async function createRoomWithRetry(baseUrl: string, attempts = 5, delayMs = 600): Promise<string> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(`${baseUrl}/rooms`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { roomId: string };
+      if (json?.roomId) return json.roomId;
+      throw new Error('Missing roomId in response');
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr ?? new Error('Failed to create room');
+}
+
 bot.command('start', async (ctx) => {
   const arg = ctx.match as string | undefined;
   let roomId: string | null = null;
   if (arg && arg.startsWith('room_')) {
     roomId = arg.slice('room_'.length);
   } else {
-    const res = await fetch(`${API_BASE_URL}/rooms`, { method: 'POST' });
-    const json = (await res.json()) as { roomId: string };
-    roomId = json.roomId;
+    try {
+      roomId = await createRoomWithRetry(API_BASE_URL);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[bot] Failed to create room via API', e);
+      await ctx.reply('Сервер временно недоступен. Попробуйте позже.');
+      return;
+    }
   }
 
+  if (!WEBAPP_BASE_URL) {
+    await ctx.reply(`Комната создана: ${roomId}. WEBAPP_BASE_URL не настроен.`);
+    return;
+  }
   const url = `${WEBAPP_BASE_URL}?start_param=room_${roomId}`;
   const keyboard = new InlineKeyboard().webApp('Открыть игру', url);
   await ctx.reply(`Комната создана: ${roomId}`, { reply_markup: keyboard });

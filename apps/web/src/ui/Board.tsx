@@ -102,24 +102,32 @@ export function Board({ roomId, board, canPick }: BoardProps) {
           >
             {c}
           </div>
-          {grid.costs.map((cost) => (
-            <button
-              key={`${c}-${cost}`}
-              className={`rounded py-4 text-lg disabled:opacity-60 disabled:line-through ${
-                canPick
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-              }`}
-              disabled={!canPick || !board.find((bc) => bc.title === c)?.values.includes(cost)}
-              onClick={() => onPickCell(c, cost)}
-              title={canPick ? 'Выбрать вопрос' : 'Ожидание следующего хода'}
-            >
-              {cost}
-            </button>
-          ))}
+          {grid.costs.map((cost) => {
+            const cat = board.find((bc) => bc.title === c);
+            const available = !!cat?.values.includes(cost);
+            const isUsed = !available;
+            const disabled = !canPick || isUsed;
+            const cls = isUsed
+              ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+              : canPick
+              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+              : 'bg-gray-300 text-gray-600 cursor-not-allowed';
+            return (
+              <button
+                key={`${c}-${cost}`}
+                className={`rounded py-4 text-lg disabled:opacity-60 ${cls}`}
+                disabled={disabled}
+                onClick={() => onPickCell(c, cost)}
+                title={canPick ? 'Выбрать вопрос' : 'Сейчас выбор недоступен'}
+              >
+                {cost}
+              </button>
+            );
+          })}
         </div>
       ))}
     </div>
   );
 }
+
 
