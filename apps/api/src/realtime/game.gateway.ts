@@ -146,9 +146,11 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { roomId: string; category: string; value: number },
   ) {
-    void client; // no-op for now
     if (!payload?.roomId || !payload?.category || typeof payload?.value !== 'number') return;
-    await this.engine.onBoardPick(payload.roomId, payload.category, payload.value);
+    const userJson = client.handshake.auth?.user as string | undefined;
+    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
+    const pickerId = user?.id ?? 0;
+    await this.engine.onBoardPick(payload.roomId, payload.category, payload.value, pickerId);
   }
 
   @SubscribeMessage('ping')

@@ -135,11 +135,6 @@ export function App() {
     }
   };
 
-  const onBuzzer = () => {
-    const socket = getSocket();
-    if (roomId && socket) socket.emit('buzzer:press', { roomId });
-  };
-
   const onAnswer = (text: string) => {
     const socket = getSocket();
     if (roomId && socket && text.trim()) {
@@ -188,7 +183,7 @@ export function App() {
 
       {roomId ? (
         <div className="grow">
-          <Match onBuzzer={onBuzzer} onAnswer={onAnswer} onPause={onPause} onResume={onResume} onLeave={onLeave} />
+          <Match onAnswer={onAnswer} onPause={onPause} onResume={onResume} onLeave={onLeave} />
         </div>
       ) : (
         <div className="grow flex flex-col items-center justify-center gap-4">

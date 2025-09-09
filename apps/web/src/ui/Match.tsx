@@ -7,14 +7,13 @@ import { Scoreboard } from './Scoreboard';
 import { getUser } from '../lib/telegram';
 
 type Props = {
-  onBuzzer: () => void;
   onAnswer: (text: string) => void;
   onPause?: () => void;
   onResume?: () => void;
   onLeave: () => void;
 };
 
-export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props) {
+export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const roomId = useGameStore((s) => s.roomId);
   const solo = useGameStore((s) => s.solo);
   const players = useGameStore((s) => s.players);
@@ -41,8 +40,7 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
     return players.find((p) => !p.bot)?.id ?? 0;
   }, [players]);
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
-  const canBuzz = phase === 'buzzer_window' && activePlayerId == null;
-  const canPick = phase === 'prepare' && !question;
+  const canPick = phase === 'prepare' && activePlayerId === myId;
 
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
@@ -60,12 +58,10 @@ export function Match({ onBuzzer, onAnswer, onPause, onResume, onLeave }: Props)
       <QuestionPrompt question={question} />
 
       <Controls
-        onBuzzer={onBuzzer}
         onAnswer={onAnswer}
         onPause={onPause}
         onResume={onResume}
         onLeave={onLeave}
-        canBuzz={canBuzz}
         isMyTurnToAnswer={isMyTurnToAnswer}
         solo={solo}
       />
