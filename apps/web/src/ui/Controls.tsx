@@ -18,7 +18,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
   };
 
   return (
-    <div className="flex items-center gap-2 flex-nowrap">
+    <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
       {isMyTurnToAnswer && (
         <div className="flex items-center gap-2">
           <input
@@ -65,4 +65,3 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
     </div>
   );
 }
-
