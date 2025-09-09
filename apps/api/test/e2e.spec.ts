@@ -1,9 +1,13 @@
+import 'reflect-metadata';
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import request from 'supertest';
 import crypto from 'crypto';
 import { AppModule } from '../src/modules/app.module';
+
+// Ensure server-side Telegram bot token exists for verify endpoint during tests
+process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'test-bot-token';
 
 let app: INestApplication;
 

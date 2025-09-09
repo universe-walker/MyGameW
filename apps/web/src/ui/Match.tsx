@@ -46,6 +46,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   }, [players]);
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
   const canPick = phase === 'prepare' && activePlayerId === myId;
+  const showBoard = phase === 'prepare';
 
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
@@ -62,7 +63,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         )}
       </div>
 
-      {canPick && <Board roomId={roomId} board={board} canPick={canPick} />}
+      {showBoard && <Board roomId={roomId} board={board} canPick={canPick} />}
 
       <QuestionPrompt question={question} />
 
