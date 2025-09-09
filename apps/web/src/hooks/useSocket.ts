@@ -1,11 +1,5 @@
 import { useCallback } from 'react';
-import type {
-  Socket,
-  TRoomState,
-  TGamePhaseEvent,
-  TBotStatus,
-  TBoardState,
-} from '@mygame/shared';
+import type { Socket, TRoomState, TGamePhaseEvent, TBotStatus, TBoardState, TAnswerReveal } from '@mygame/shared';
 import { getInitDataRaw, getUser } from '../lib/telegram';
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket';
 import { useGameStore } from '../state/store';
@@ -16,6 +10,7 @@ function setupSocketListeners(
   setPhase: any,
   setBotStatus: any,
   setBoard: any,
+  setReveal: (text: string | null) => void,
 ) {
   console.log('[socket] setupSocketListeners: attaching listeners');
   socket.off('room:state');
@@ -29,6 +24,7 @@ function setupSocketListeners(
   socket.on('game:phase', (p: TGamePhaseEvent) => {
     console.log('[socket] event game:phase', p);
     setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question, p.scores as any);
+    if (p.phase === 'prepare' || p.phase === 'answer_wait') setReveal(null);
   });
   socket.on('bot:status', (b: TBotStatus) => {
     console.log('[socket] event bot:status', b);
@@ -37,6 +33,11 @@ function setupSocketListeners(
   socket.on('board:state', (b: TBoardState) => {
     console.log('[socket] event board:state', b);
     if (Array.isArray(b?.categories)) setBoard(b.categories);
+  });
+
+  socket.on('answer:reveal', (r: TAnswerReveal) => {
+    console.log('[socket] event answer:reveal', r);
+    if (typeof r?.text === 'string') setReveal(r.text);
   });
 
   // Auto rejoin the room on (re)connect if we have one
@@ -54,6 +55,7 @@ export function useSocket() {
   const setPhase = useGameStore((s) => s.setPhase);
   const setBoard = useGameStore((s) => s.setBoard);
   const setBotStatus = useGameStore((s) => s.setBotStatus);
+  const setReveal = useGameStore((s) => s.setRevealAnswer);
 
   const connect = useCallback(() => {
     let socket = getSocket();
@@ -62,7 +64,7 @@ export function useSocket() {
       const user = getUser();
       console.log('[ui] connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
       socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
-      setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard);
+      setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard, setReveal);
     }
     return socket;
   }, [setRoom, setPhase, setBotStatus, setBoard]);

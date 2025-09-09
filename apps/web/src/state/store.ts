@@ -23,6 +23,7 @@ type State = {
   boardCategories: BoardCategory[];
   question?: CurrentQuestion;
   scores: Record<number, number>;
+  revealAnswer: string | null;
   setRoom: (id: string, players: Player[], solo?: boolean) => void;
   setPhase: (
     phase: Phase,
@@ -33,6 +34,7 @@ type State = {
   ) => void;
   setBoard: (categories: BoardCategory[]) => void;
   setBotStatus: (playerId: number, status: string) => void;
+  setRevealAnswer: (text: string | null) => void;
   leaveRoom: () => void;
 };
 
@@ -47,13 +49,15 @@ export const useGameStore = create<State>((set) => ({
   boardCategories: [],
   question: undefined,
   scores: {},
+  revealAnswer: null,
   setRoom: (id, players, solo = false) => set({ roomId: id, players, solo }),
   setPhase: (phase, until, activePlayerId, question, scores) =>
     set((s) => ({ phase, until, activePlayerId, question, scores: scores ?? s.scores })),
   setBoard: (categories) => set({ boardCategories: categories }),
   setBotStatus: (playerId, status) => set((s) => ({ botStatuses: { ...s.botStatuses, [playerId]: status } })),
+  setRevealAnswer: (text) => set({ revealAnswer: text }),
   leaveRoom: () =>
-    set({ roomId: null, solo: false, players: [], phase: 'idle', until: undefined, activePlayerId: null, botStatuses: {}, boardCategories: [], question: undefined, scores: {} }),
+    set({ roomId: null, solo: false, players: [], phase: 'idle', until: undefined, activePlayerId: null, botStatuses: {}, boardCategories: [], question: undefined, scores: {}, revealAnswer: null }),
 }));
 
 

@@ -103,6 +103,15 @@ export const ZBoardState = z.object({ roomId: z.string().uuid(), categories: z.a
 export type TBoardCategory = z.infer<typeof ZBoardCategory>;
 export type TBoardState = z.infer<typeof ZBoardState>;
 
+// Reveal the correct answer after all failed
+export const ZAnswerReveal = z.object({
+  roomId: z.string().uuid(),
+  category: z.string(),
+  value: z.number().int(),
+  text: z.string(),
+});
+export type TAnswerReveal = z.infer<typeof ZAnswerReveal>;
+
 export type TSocketClientToServerEvents = {
   'rooms:create': () => void;
   'rooms:join': (payload: { roomId: string }) => void;
@@ -124,6 +133,7 @@ export type TSocketServerToClientEvents = {
   'bot:status': (payload: TBotStatus) => void;
   'board:state': (payload: TBoardState) => void;
   'word:reveal': (payload: { position: number; char: string }) => void;
+  'answer:reveal': (payload: TAnswerReveal) => void;
   pong: () => void;
 };
 

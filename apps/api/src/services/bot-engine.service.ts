@@ -52,6 +52,7 @@ export class BotEngineService {
   );
   private SCORE_APPLY_MS = this.intFromEnv('SCORE_APPLY_MS', 1000);
   private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', false);
+  private REVEAL_MS = this.intFromEnv('REVEAL_MS', 2500);
 
   constructor(
     private timers: TimerRegistryService,
@@ -319,6 +320,28 @@ export class BotEngineService {
     rr.question = await this.loadQuestion(cat.title, value);
   }
 
+  private async loadAnswer(categoryTitle: string, value: number) {
+    try {
+      const catRec = await this.prisma.category.findUnique({ where: { title: categoryTitle } });
+      if (!catRec) return '';
+      const q = await this.prisma.question.findFirst({
+        where: { categoryId: catRec.id, value },
+        orderBy: { createdAt: 'asc' },
+        select: { canonicalAnswer: true, rawAnswer: true, answersAccept: true },
+      });
+      if (!q) return '';
+      const ca: any = (q as any).canonicalAnswer;
+      const ra: any = (q as any).rawAnswer;
+      const acc: any = (q as any).answersAccept;
+      if (typeof ca === 'string' && ca.trim()) return ca.trim();
+      if (typeof ra === 'string' && ra.trim()) return ra.trim();
+      if (Array.isArray(acc) && acc.length && typeof acc[0] === 'string') return acc[0];
+      return '';
+    } catch {
+      return '';
+    }
+  }
+
   async onBoardPick(roomId: string, categoryTitle: string, value: number, pickerId?: number) {
     const rr = this.rooms.get(roomId);
     if (!rr || !rr.running) return;
@@ -551,12 +574,24 @@ export class BotEngineService {
       }
       return;
     }
-    // Last player also failed -> reveal answer (not implemented here), advance picker to next player
-    rr.question = undefined;
-    rr.activePlayerId = null;
-    rr.pickerIndex = this.nextIndexInOrder(roomId, startIdx);
-    void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
-    void this.schedulePrepare(roomId);
+    // Last player also failed -> reveal answer, then advance picker to next player
+    const cat = rr.question?.category ?? 'unknown';
+    const val = rr.question?.value ?? 0;
+    void this.loadAnswer(cat, val).then((text) => {
+      try {
+        this.server?.to(roomId).emit('answer:reveal', { roomId, category: cat, value: val, text } as any);
+      } catch {}
+    });
+    this.goto(roomId, 'round_end', Date.now() + this.REVEAL_MS);
+    this.timers.set(roomId, 'phase_round_end', this.REVEAL_MS, () => {
+      const rrx = this.rooms.get(roomId);
+      if (!rrx?.running) return;
+      rrx.question = undefined;
+      rrx.activePlayerId = null;
+      rrx.pickerIndex = this.nextIndexInOrder(roomId, startIdx);
+      void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
+      void this.schedulePrepare(roomId);
+    });
   }
 
   setSeed(seed: number) {
