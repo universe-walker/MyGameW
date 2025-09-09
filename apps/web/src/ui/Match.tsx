@@ -24,6 +24,9 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const board = useGameStore((s) => s.boardCategories);
   const question = useGameStore((s) => s.question);
   const scores = useGameStore((s) => s.scores);
+  const paused = useGameStore((s) => s.paused);
+  const pauseOffsetMs = useGameStore((s) => s.pauseOffsetMs);
+  const pauseStartedAt = useGameStore((s) => s.pauseStartedAt);
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -31,7 +34,9 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
   }, [until]);
-  const remainingMs = until ? Math.max(0, until - now) : undefined;
+
+  const dynamicOffset = pauseStartedAt && paused ? pauseOffsetMs + (now - pauseStartedAt) : pauseOffsetMs;
+  const remainingMs = until ? Math.max(0, until + dynamicOffset - now) : undefined;
 
   // My player id: use Telegram user id if available, fallback to first non-bot
   const myId = useMemo(() => {
@@ -44,10 +49,14 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
-
       {/* Phase + timer */}
       <div className="flex items-center justify-between p-2 rounded bg-slate-100">
-        <div className="text-sm">Фаза: {phase}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm">Фаза: {phase}</div>
+          {paused && (
+            <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-1">⏸ Пауза</span>
+          )}
+        </div>
         {remainingMs !== undefined && (
           <div className="font-mono">{Math.ceil(remainingMs / 100) / 10}s</div>
         )}
@@ -64,6 +73,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         onLeave={onLeave}
         isMyTurnToAnswer={isMyTurnToAnswer}
         solo={solo}
+        paused={paused}
       />
 
       <Scoreboard
@@ -75,3 +85,4 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     </div>
   );
 }
+

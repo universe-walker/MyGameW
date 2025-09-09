@@ -15,6 +15,7 @@ export function App() {
   const roomId = useGameStore((s) => s.roomId);
   const solo = useGameStore((s) => s.solo);
   const leaveRoom = useGameStore((s) => s.leaveRoom);
+  const setPaused = useGameStore((s) => s.setPaused);
   const { shopOpen, achievementsOpen, openShop, closeShop, openAchievements, closeAchievements } = useUiHome();
   const [profileScore, setProfileScore] = useState<number>(0);
   const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
@@ -146,11 +147,13 @@ export function App() {
     if (!roomId) return;
     const socket = getSocket();
     socket?.emit('solo:pause', { roomId });
+    setPaused(true);
   };
   const onResume = () => {
     if (!roomId) return;
     const socket = getSocket();
     socket?.emit('solo:resume', { roomId });
+    setPaused(false);
   };
 
   const onLeave = () => {

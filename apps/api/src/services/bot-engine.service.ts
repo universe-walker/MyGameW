@@ -51,7 +51,8 @@ export class BotEngineService {
     this.intFromEnv('ANSWER_WAIT_MS', 15000),
   );
   private SCORE_APPLY_MS = this.intFromEnv('SCORE_APPLY_MS', 1000);
-  private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', false);
+  // Allow pause in solo by default; can be disabled via env
+  private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', true);
   private REVEAL_MS = this.intFromEnv('REVEAL_MS', 2500);
 
   constructor(

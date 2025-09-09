@@ -7,9 +7,10 @@ export type ControlsProps = {
   onLeave: () => void;
   isMyTurnToAnswer: boolean;
   solo: boolean;
+  paused?: boolean;
 };
 
-export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, solo }: ControlsProps) {
+export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, solo, paused = false }: ControlsProps) {
   const [answer, setAnswer] = useState('');
   const submitAnswer = () => {
     if (!isMyTurnToAnswer || !answer.trim()) return;
@@ -40,21 +41,21 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           <div className="text-xs text-green-700">Ваш ход</div>
         </div>
       )}
-      {solo && (
-        <>
-          <button
-            onClick={onPause}
-            className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
-          >
-            Пауза
-          </button>
-          <button
-            onClick={onResume}
-            className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
-          >
-            Продолжить
-          </button>
-        </>
+      {solo && !paused && (
+        <button
+          onClick={onPause}
+          className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
+        >
+          Пауза
+        </button>
+      )}
+      {solo && paused && (
+        <button
+          onClick={onResume}
+          className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
+        >
+          Продолжить
+        </button>
       )}
       <button
         onClick={onLeave}
@@ -65,3 +66,4 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
     </div>
   );
 }
+
