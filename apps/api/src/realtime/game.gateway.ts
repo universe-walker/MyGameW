@@ -10,7 +10,15 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RedisService } from '../services/redis.service';
-import { ZRoomsJoinReq, ZRoomsLeaveReq, ZBuzzerPressReq, ZAnswerSubmitReq, ZBoardPickReq } from '@mygame/shared';
+import {
+  ZRoomsJoinReq,
+  ZRoomsLeaveReq,
+  ZBuzzerPressReq,
+  ZAnswerSubmitReq,
+  ZBoardPickReq,
+  ZSoloPauseReq,
+  ZSoloResumeReq,
+} from '@mygame/shared';
 import crypto from 'crypto';
 import { BotEngineService } from '../services/bot-engine.service';
 import { parseInitData, verifyInitData } from '../services/telegram-auth.util';
@@ -68,7 +76,11 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   @SubscribeMessage('rooms:join')
   async onRoomsJoin(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
     const parsed = ZRoomsJoinReq.safeParse(payload);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for rooms:join', payload);
+      return;
+    }
     const { roomId } = parsed.data;
     await client.join(roomId);
     const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
@@ -91,7 +103,11 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   @SubscribeMessage('rooms:leave')
   async onRoomsLeave(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
     const parsed = ZRoomsLeaveReq.safeParse(payload);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for rooms:leave', payload);
+      return;
+    }
     const roomId = parsed.data.roomId;
     // Remove player from Redis set if we can identify them
     const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
@@ -126,23 +142,37 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('solo:pause')
-  onSoloPause(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
-    void client; // no-op
-    if (!payload?.roomId) return;
-    this.engine.pause(payload.roomId);
+  onSoloPause(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
+    void client;
+    const parsed = ZSoloPauseReq.safeParse(payload);
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for solo:pause', payload);
+      return;
+    }
+    this.engine.pause(parsed.data.roomId);
   }
 
   @SubscribeMessage('solo:resume')
-  onSoloResume(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
-    void client; // no-op
-    if (!payload?.roomId) return;
-    this.engine.resume(payload.roomId);
+  onSoloResume(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
+    void client;
+    const parsed = ZSoloResumeReq.safeParse(payload);
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for solo:resume', payload);
+      return;
+    }
+    this.engine.resume(parsed.data.roomId);
   }
 
   @SubscribeMessage('buzzer:press')
   onBuzzerPress(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
     const parsed = ZBuzzerPressReq.safeParse(payload);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for buzzer:press', payload);
+      return;
+    }
     const user = (client as any).data?.user as { id: number } | undefined;
     const playerId = user?.id ?? 0; // allow Anon in dev to play as id 0
     this.engine.onHumanBuzzer(parsed.data.roomId, playerId);
@@ -151,7 +181,11 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   @SubscribeMessage('answer:submit')
   onAnswerSubmit(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
     const parsed = ZAnswerSubmitReq.safeParse(payload);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for answer:submit', payload);
+      return;
+    }
     const user = (client as any).data?.user as { id: number } | undefined;
     const playerId = user?.id ?? 0; // allow Anon in dev
     this.engine.onHumanAnswer(parsed.data.roomId, playerId, parsed.data.text);
@@ -163,7 +197,11 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() payload: unknown,
   ) {
     const parsed = ZBoardPickReq.safeParse(payload);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for board:pick', payload);
+      return;
+    }
     const user = (client as any).data?.user as { id: number } | undefined;
     const pickerId = user?.id ?? 0;
     const { roomId, category, value } = parsed.data;

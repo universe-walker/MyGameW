@@ -17,6 +17,9 @@ export const ZRoomsCreateRes = z.object({ roomId: z.string().uuid() });
 export const ZCreateSoloRes = z.object({ roomId: z.string().uuid() });
 export const ZRoomsJoinReq = z.object({ roomId: z.string().uuid() });
 export const ZRoomsLeaveReq = z.object({ roomId: z.string().uuid() });
+export const ZSoloPauseReq = z.object({ roomId: z.string().uuid() });
+export const ZSoloResumeReq = z.object({ roomId: z.string().uuid() });
+export const ZRoomsLeaveReq = z.object({ roomId: z.string().uuid() });
 
 // WS controls
 export const ZBuzzerPressReq = z.object({ roomId: z.string().uuid() });
@@ -64,6 +67,9 @@ export type TInitVerifyRes = z.infer<typeof ZInitVerifyRes>;
 export type TRoomsCreateRes = z.infer<typeof ZRoomsCreateRes>;
 export type TCreateSoloRes = z.infer<typeof ZCreateSoloRes>;
 export type TRoomsJoinReq = z.infer<typeof ZRoomsJoinReq>;
+export type TRoomsLeaveReq = z.infer<typeof ZRoomsLeaveReq>;
+export type TSoloPauseReq = z.infer<typeof ZSoloPauseReq>;
+export type TSoloResumeReq = z.infer<typeof ZSoloResumeReq>;
 export type TRoomsLeaveReq = z.infer<typeof ZRoomsLeaveReq>;
 export type TBuzzerPressReq = z.infer<typeof ZBuzzerPressReq>;
 export type TAnswerSubmitReq = z.infer<typeof ZAnswerSubmitReq>;
