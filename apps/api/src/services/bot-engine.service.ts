@@ -31,9 +31,9 @@ type RoomRuntime = {
   answerIndex?: number; // index in order[] of who currently answers
   questionStartPickerIndex?: number; // index in order[] who picked current question
   botProfiles?: Map<number, ReturnType<BotProfilesService['getAll']>[number]>; // mapping botId -> profile
-  // Rounds and Super usage tracking
+  // Rounds and Super preselected cells per round
   round?: number; // 1-based
-  superUsed?: Map<number, Set<number>>; // round -> used values (e.g., 200, 400)
+  superCells?: Map<number, Set<string>>; // round -> set of "category:value" keys that are Super
 };
 
 @Injectable()
@@ -94,7 +94,7 @@ export class BotEngineService {
       activePlayerId: null,
       scores: {},
       round: 1,
-      superUsed: new Map(),
+      superCells: new Map(),
     };
     this.rooms.set(roomId, rr);
     // Ensure board is loaded and emit to clients
@@ -298,11 +298,9 @@ export class BotEngineService {
     const rr = this.rooms.get(roomId);
     if (!rr) return;
     if (rr.board && rr.board.some((c) => c.values.length > 0)) return;
-    // If board existed but is now empty, advance round and reset Super usage for that round
+    // If board existed but is now empty, advance round
     if (rr.board && rr.board.every((c) => c.values.length === 0)) {
       rr.round = (rr.round ?? 1) + 1;
-      rr.superUsed = rr.superUsed ?? new Map();
-      if (!rr.superUsed.has(rr.round)) rr.superUsed.set(rr.round, new Set());
     }
     // Load first 4 categories with up to 5 values each
     const cats = await this.prisma.category.findMany({
@@ -318,6 +316,8 @@ export class BotEngineService {
         .sort((a: number, b: number) => a - b)
         .slice(0, 5),
     }));
+    // Seed random Super cells for the round if not seeded yet
+    await this.seedSuperForRound(roomId);
   }
 
   private async loadQuestion(categoryTitle: string, value: number) {
@@ -394,7 +394,7 @@ export class BotEngineService {
     // Load question prompt
     rr.question = await this.loadQuestion(categoryTitle, value);
     // Super-game decision and options
-    rr.isSuperQuestion = this.shouldTriggerSuper(rr, value);
+    rr.isSuperQuestion = this.shouldTriggerSuper(rr, categoryTitle, value);
     if (rr.isSuperQuestion) {
       try {
         rr.questionOptions = await this.buildSuperOptions(categoryTitle, value);
@@ -668,16 +668,48 @@ export class BotEngineService {
     });
   }
 
-  private shouldTriggerSuper(rr: RoomRuntime, value: number) {
+  private shouldTriggerSuper(rr: RoomRuntime, categoryTitle: string, value: number) {
     const round = rr.round ?? 1;
-    const allowed = round === 1 ? new Set([400]) : round === 2 ? new Set([200, 400]) : new Set<number>();
-    if (!allowed.has(value)) return false;
-    rr.superUsed = rr.superUsed ?? new Map();
-    if (!rr.superUsed.has(round)) rr.superUsed.set(round, new Set());
-    const used = rr.superUsed.get(round)!;
-    if (used.has(value)) return false;
-    used.add(value);
-    return true;
+    const key = `${categoryTitle}:${value}`;
+    const set = rr.superCells?.get(round);
+    if (!set) return false;
+    return set.has(key);
+  }
+
+  private async seedSuperForRound(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr?.board) return;
+    const round = rr.round ?? 1;
+    rr.superCells = rr.superCells ?? new Map();
+    if (rr.superCells.has(round)) return; // already seeded for this round
+
+    const cells400: string[] = [];
+    const cells200: string[] = [];
+    for (const c of rr.board) {
+      for (const v of c.values) {
+        if (v === 400) cells400.push(`${c.title}:${v}`);
+        if (v === 200) cells200.push(`${c.title}:${v}`);
+      }
+    }
+
+    const picks = new Set<string>();
+    const pickRandom = (arr: string[]) => {
+      if (!arr.length) return undefined;
+      const idx = Math.floor(this.rand() * arr.length);
+      return arr[idx];
+    };
+
+    if (round === 1) {
+      const p400 = pickRandom(cells400);
+      if (p400) picks.add(p400);
+    } else if (round === 2) {
+      const p200 = pickRandom(cells200);
+      const p400 = pickRandom(cells400);
+      if (p200) picks.add(p200);
+      if (p400) picks.add(p400);
+    }
+
+    rr.superCells.set(round, picks);
   }
 
   private async buildSuperOptions(categoryTitle: string, value: number) {

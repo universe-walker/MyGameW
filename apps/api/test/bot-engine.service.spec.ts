@@ -50,6 +50,13 @@ class PrismaMock {
     findFirst: async ({ where: { value } }: any) => {
       return { prompt: `Prompt for ${value}`, canonicalAnswer: 'A', rawAnswer: 'A', answersAccept: ['A'] };
     },
+    findMany: async () => {
+      // Provide a pool of distractors for multiple-choice generation
+      return Array.from({ length: 20 }, (_, i) => ({
+        canonicalAnswer: `Ans${i + 1}`,
+        rawAnswer: `Ans${i + 1}`,
+      }));
+    },
   };
 }
 
