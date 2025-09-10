@@ -29,6 +29,8 @@ class TimerRegistryMock {
 
 // Prisma mock
 class PrismaMock {
+  // Values for which SuperQuestion pool is considered empty (to test skip behavior)
+  public disabledSuperValues = new Set<number>();
   private _cats = [0, 1, 2, 3].map((i) => ({ id: `c${i + 1}`, title: `Cat ${i + 1}` }));
   private _qs: Record<string, { id: string; value: number; prompt: string; canonicalAnswer: string; rawAnswer: string }[]> = {};
   private _superByQuestion: Record<string, { id: string; questionId: string; options: string[]; lastUsedAt: Date | null; enabled: boolean }[]> = {};
@@ -121,6 +123,7 @@ class PrismaMock {
   };
 
   private ensureSuperPool(categoryId: string, value: number) {
+    if (this.disabledSuperValues.has(value)) return [] as any[];
     const q = (this._qs[categoryId] || []).find((x) => x.value === value);
     if (!q) return [] as any[];
     const list = (this._superByQuestion[q.id] ||= []);
@@ -330,6 +333,41 @@ describe('Super-game behavior', () => {
     await tick();
     const lastPhase = (server.__events[roomId] || []).filter((e) => e.event === 'game:phase').at(-1)?.payload?.phase;
     expect(lastPhase).toBe('round_end');
+  });
+
+  it('Empty pool: skip Super assignment (no options, full penalty)', async () => {
+    const engine = new BotEngineService(timers as any, profiles as any, telemetry as any, prisma as any, redis as any);
+    engine.setServer(server);
+    engine.setSeed(5);
+    const roomId = 'sg-empty-0001-0001-0001-000000000005';
+    // Disable Super pool for 400 to emulate empty pool in round 1
+    (prisma as any).disabledSuperValues.add(400);
+    redis.setPlayers(roomId, [{ id: 1, name: 'You' }]);
+    engine.start(roomId);
+    await tick(); await tick();
+
+    // Ensure we are in prepare phase
+    for (let i = 0; i < 10; i++) {
+      const pe = (server.__events[roomId] || []).filter((e) => e.event === 'game:phase').at(-1)?.payload;
+      if (pe?.phase === 'prepare') break;
+      await tick();
+    }
+
+    // Pick 400 (would be Super normally), but pool is empty -> should be normal question (no options)
+    await engine.onBoardPick(roomId, 'Cat 1', 400, 1);
+    await tick();
+    let last = (server.__events[roomId] || []).filter((e) => e.event === 'game:phase').at(-1)?.payload;
+    // No options field in question payload
+    expect(Array.isArray(last?.question?.options)).toBe(false);
+
+    // Answer wrong -> full -400 penalty (not -200)
+    await engine.onHumanAnswer(roomId, 1, 'wrong');
+    await tick();
+    const sc = (server.__events[roomId] || [])
+      .filter((e) => e.event === 'game:phase' && e.payload?.phase === 'score_apply')
+      .at(-1)?.payload?.scores;
+    const s1 = sc?.['1'] ?? sc?.[1];
+    expect(s1).toBe(-400);
   });
 
   it('Normal wrong with 2 humans passes to next and full -V', async () => {
