@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Socket, TRoomState, TGamePhaseEvent, TBotStatus, TBoardState, TAnswerReveal } from '@mygame/shared';
+import type { Socket, TRoomState, TGamePhaseEvent, TBotStatus, TBoardState } from '@mygame/shared';
 import { getInitDataRaw, getUser } from '../lib/telegram';
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket';
 import { useGameStore } from '../state/store';
@@ -35,7 +35,7 @@ function setupSocketListeners(
     if (Array.isArray(b?.categories)) setBoard(b.categories);
   });
 
-  socket.on('answer:reveal', (r: TAnswerReveal) => {
+  socket.on('answer:reveal', (r: any) => {
     console.log('[socket] event answer:reveal', r);
     if (typeof r?.text === 'string') setReveal(r.text);
   });

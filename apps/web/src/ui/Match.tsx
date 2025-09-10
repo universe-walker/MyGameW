@@ -45,6 +45,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     return players.find((p) => !p.bot)?.id ?? 0;
   }, [players]);
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
+  const hasOptions = Array.isArray(question?.options) && (question?.options?.length ?? 0) > 0;
   const canPick = phase === 'prepare' && activePlayerId === myId;
   const showBoard = phase === 'prepare';
 
@@ -67,12 +68,27 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
       <QuestionPrompt question={question} />
 
+      {/* Super-game MCQ options */}
+      {isMyTurnToAnswer && hasOptions && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {question!.options!.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => onAnswer(opt)}
+              className="px-3 py-2 rounded bg-indigo-600 text-white text-sm md:text-base text-left"
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+
       <Controls
         onAnswer={onAnswer}
         onPause={onPause}
         onResume={onResume}
         onLeave={onLeave}
-        isMyTurnToAnswer={isMyTurnToAnswer}
+        isMyTurnToAnswer={isMyTurnToAnswer && !hasOptions}
         solo={solo}
         paused={paused}
       />

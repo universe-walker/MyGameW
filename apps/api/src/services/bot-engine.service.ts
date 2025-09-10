@@ -17,6 +17,10 @@ type RoomRuntime = {
   board?: { title: string; values: number[] }[];
   // Current question info
   question?: { category: string; value: number; prompt: string } | undefined;
+  // Super-game options for current question (if any)
+  questionOptions?: string[];
+  // Flag: current question is Super-game
+  isSuperQuestion?: boolean;
   // Scoreboard for the room (playerId -> score)
   scores?: Record<number, number>;
   // Whether the last submitted answer (by activePlayerId) was correct
@@ -27,6 +31,9 @@ type RoomRuntime = {
   answerIndex?: number; // index in order[] of who currently answers
   questionStartPickerIndex?: number; // index in order[] who picked current question
   botProfiles?: Map<number, ReturnType<BotProfilesService['getAll']>[number]>; // mapping botId -> profile
+  // Rounds and Super usage tracking
+  round?: number; // 1-based
+  superUsed?: Map<number, Set<number>>; // round -> used values (e.g., 200, 400)
 };
 
 @Injectable()
@@ -54,6 +61,8 @@ export class BotEngineService {
   // Allow pause in solo by default; can be disabled via env
   private SOLO_ALLOW_PAUSE = this.boolFromEnv('SOLO_ALLOW_PAUSE', true);
   private REVEAL_MS = this.intFromEnv('REVEAL_MS', 2500);
+  // Super-game answer window (10–15s recommended)
+  private SUPER_WAIT_MS = this.intFromEnv('SUPER_WAIT_MS', 12000);
 
   constructor(
     private timers: TimerRegistryService,
@@ -78,7 +87,15 @@ export class BotEngineService {
 
   start(roomId: string) {
     if (this.isRunning(roomId)) return;
-    const rr: RoomRuntime = { running: true, phase: 'idle', until: undefined, activePlayerId: null, scores: {} };
+    const rr: RoomRuntime = {
+      running: true,
+      phase: 'idle',
+      until: undefined,
+      activePlayerId: null,
+      scores: {},
+      round: 1,
+      superUsed: new Map(),
+    };
     this.rooms.set(roomId, rr);
     // Ensure board is loaded and emit to clients
     void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
@@ -243,7 +260,12 @@ export class BotEngineService {
       if (pid != null && typeof val === 'number' && val > 0) {
         rr.scores = rr.scores || {};
         if (typeof rr.lastAnswerCorrect === 'boolean') {
-          const delta = rr.lastAnswerCorrect ? val : -val;
+          let delta = 0;
+          if (rr.lastAnswerCorrect) {
+            delta = val;
+          } else {
+            delta = rr.isSuperQuestion ? -Math.round(val / 2) : -val;
+          }
           rr.scores[pid] = (rr.scores[pid] ?? 0) + delta;
         }
         // do not reset here; advanceAfterScore will manage correctness lifecycle
@@ -255,7 +277,9 @@ export class BotEngineService {
   private emitPhase(roomId: string, phase: Phase, until?: number) {
     const rr = this.rooms.get(roomId);
     const activePlayerId = rr?.activePlayerId ?? null;
-    const question = rr?.question ? { ...rr.question } : undefined;
+    const question = rr?.question
+      ? { ...rr.question, ...(Array.isArray(rr.questionOptions) ? { options: rr.questionOptions } : {}) }
+      : undefined;
     const scores = rr?.scores ? { ...rr.scores } : undefined;
     this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId, question, scores } as any);
   }
@@ -274,6 +298,12 @@ export class BotEngineService {
     const rr = this.rooms.get(roomId);
     if (!rr) return;
     if (rr.board && rr.board.some((c) => c.values.length > 0)) return;
+    // If board existed but is now empty, advance round and reset Super usage for that round
+    if (rr.board && rr.board.every((c) => c.values.length === 0)) {
+      rr.round = (rr.round ?? 1) + 1;
+      rr.superUsed = rr.superUsed ?? new Map();
+      if (!rr.superUsed.has(rr.round)) rr.superUsed.set(rr.round, new Set());
+    }
     // Load first 4 categories with up to 5 values each
     const cats = await this.prisma.category.findMany({
       take: 4,
@@ -363,6 +393,18 @@ export class BotEngineService {
     this.emitBoardState(roomId);
     // Load question prompt
     rr.question = await this.loadQuestion(categoryTitle, value);
+    // Super-game decision and options
+    rr.isSuperQuestion = this.shouldTriggerSuper(rr, value);
+    if (rr.isSuperQuestion) {
+      try {
+        rr.questionOptions = await this.buildSuperOptions(categoryTitle, value);
+      } catch {
+        rr.isSuperQuestion = false;
+        rr.questionOptions = undefined;
+      }
+    } else {
+      rr.questionOptions = undefined;
+    }
     // Clear any pending prepare timers to avoid duplicate transitions
     this.timers.clearAll(roomId);
     // Set answering order starting from picker
@@ -372,7 +414,11 @@ export class BotEngineService {
     const pid = this.getCurrentAnswererId(roomId);
     rr.activePlayerId = pid ?? null;
     const isBot = typeof pid === 'number' ? pid < 0 : false;
-    const waitMs = isBot ? this.ANSWER_WAIT_BOT_MS : this.ANSWER_WAIT_HUMAN_MS;
+    const waitMs = rr.isSuperQuestion
+      ? this.SUPER_WAIT_MS
+      : isBot
+      ? this.ANSWER_WAIT_BOT_MS
+      : this.ANSWER_WAIT_HUMAN_MS;
     this.goto(roomId, 'answer_wait', Date.now() + waitMs);
     if (isBot && typeof pid === 'number') {
       this.scheduleBotThinkAndAnswer(roomId, pid);
@@ -548,9 +594,34 @@ export class BotEngineService {
       // The same player becomes the next picker
       rr.pickerIndex = currAnswerIdx;
       rr.question = undefined;
+      rr.questionOptions = undefined;
+      rr.isSuperQuestion = undefined;
       rr.activePlayerId = null;
       void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
       void this.schedulePrepare(roomId);
+      return;
+    }
+    // Super-game: do not pass to others on wrong/timeout
+    if (rr.isSuperQuestion) {
+      const cat = rr.question?.category ?? 'unknown';
+      const val = rr.question?.value ?? 0;
+      void this.loadAnswer(cat, val).then((text) => {
+        try {
+          this.server?.to(roomId).emit('answer:reveal', { roomId, category: cat, value: val, text } as any);
+        } catch {}
+      });
+      this.goto(roomId, 'round_end', Date.now() + this.REVEAL_MS);
+      this.timers.set(roomId, 'phase_round_end', this.REVEAL_MS, () => {
+        const rrx = this.rooms.get(roomId);
+        if (!rrx?.running) return;
+        rrx.question = undefined;
+        rrx.questionOptions = undefined;
+        rrx.isSuperQuestion = undefined;
+        rrx.activePlayerId = null;
+        rrx.pickerIndex = this.nextIndexInOrder(roomId, startIdx);
+        void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
+        void this.schedulePrepare(roomId);
+      });
       return;
     }
     // Incorrect or timeout -> move to next answerer if any
@@ -588,11 +659,61 @@ export class BotEngineService {
       const rrx = this.rooms.get(roomId);
       if (!rrx?.running) return;
       rrx.question = undefined;
+      rrx.questionOptions = undefined;
+      rrx.isSuperQuestion = undefined;
       rrx.activePlayerId = null;
       rrx.pickerIndex = this.nextIndexInOrder(roomId, startIdx);
       void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
       void this.schedulePrepare(roomId);
     });
+  }
+
+  private shouldTriggerSuper(rr: RoomRuntime, value: number) {
+    const round = rr.round ?? 1;
+    const allowed = round === 1 ? new Set([400]) : round === 2 ? new Set([200, 400]) : new Set<number>();
+    if (!allowed.has(value)) return false;
+    rr.superUsed = rr.superUsed ?? new Map();
+    if (!rr.superUsed.has(round)) rr.superUsed.set(round, new Set());
+    const used = rr.superUsed.get(round)!;
+    if (used.has(value)) return false;
+    used.add(value);
+    return true;
+  }
+
+  private async buildSuperOptions(categoryTitle: string, value: number) {
+    const correct = await this.loadAnswer(categoryTitle, value);
+    const correctNorm = this.normalizeAnswer(correct);
+    const candidates = await this.prisma.question.findMany({
+      take: 50,
+      orderBy: { createdAt: 'asc' },
+      select: { canonicalAnswer: true, rawAnswer: true },
+    });
+    const pool = new Set<string>();
+    for (const q of candidates) {
+      const a: any = (q as any).canonicalAnswer || (q as any).rawAnswer || '';
+      const norm = this.normalizeAnswer(a);
+      if (!norm || norm === correctNorm) continue;
+      pool.add(String(a));
+      if (pool.size >= 30) break;
+    }
+    const src = Array.from(pool);
+    const distractors: string[] = [];
+    while (distractors.length < 3 && src.length > 0) {
+      const idx = Math.floor(this.rand() * src.length);
+      const [pick] = src.splice(idx, 1);
+      if (this.normalizeAnswer(pick) !== correctNorm) distractors.push(pick);
+    }
+    const FALLBACKS = ['—', 'Не знаю', 'Пропуск'];
+    for (const f of FALLBACKS) {
+      if (distractors.length >= 3) break;
+      if (this.normalizeAnswer(f) !== correctNorm) distractors.push(f);
+    }
+    const arr = [correct, ...distractors.slice(0, 3)];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(this.rand() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
   }
 
   setSeed(seed: number) {

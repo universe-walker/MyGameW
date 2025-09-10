@@ -81,7 +81,13 @@ export const ZGamePhaseEvent = z.object({
   activePlayerId: z.number().int().nullable().optional(),
   // Optional: current question info for the phase
   question: z
-    .object({ category: z.string(), value: z.number().int(), prompt: z.string() })
+    .object({
+      category: z.string(),
+      value: z.number().int(),
+      prompt: z.string(),
+      // If present, question is in multiple-choice mode (Super Game)
+      options: z.array(z.string()).optional(),
+    })
     .optional(),
   // Optional: current scores by playerId
   scores: z.record(z.string(), z.number().int()).optional(),

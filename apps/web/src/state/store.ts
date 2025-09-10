@@ -10,7 +10,7 @@ export type Phase =
   | 'round_end'
   | 'final';
 export type BoardCategory = { title: string; values: number[] };
-export type CurrentQuestion = { category: string; value: number; prompt: string };
+export type CurrentQuestion = { category: string; value: number; prompt: string; options?: string[] };
 
 type State = {
   roomId: string | null;

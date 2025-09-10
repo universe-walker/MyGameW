@@ -1,9 +1,5 @@
 import { io } from 'socket.io-client';
-import type {
-  Socket,
-  TSocketClientToServerEvents,
-  TSocketServerToClientEvents,
-} from '@mygame/shared';
+import type { Socket } from '@mygame/shared';
 import { apiBase } from './api';
 
 let socket: Socket | null = null;
@@ -27,22 +23,22 @@ export function connectSocket(initDataRaw: string, userJson?: string) {
     initDataRawLen: initDataRaw?.length ?? 0,
   });
 
-  socket = io<TSocketServerToClientEvents, TSocketClientToServerEvents>(nsUrl, {
+  socket = io(nsUrl, {
     transports: ['websocket'],
     auth: { initDataRaw, user: userJson },
-  });
+  }) as unknown as Socket;
 
   // Lifecycle logging
   socket.on('connect', () => {
     console.log('[socket] connect: id=', socket.id);
   });
-  socket.on('connect_error', (err) => {
+  socket.on('connect_error', (err: any) => {
     console.error('[socket] connect_error:', err?.message ?? err);
   });
-  socket.on('error', (err) => {
+  socket.on('error', (err: any) => {
     console.error('[socket] error:', err);
   });
-  socket.on('disconnect', (reason) => {
+  socket.on('disconnect', (reason: any) => {
     console.warn('[socket] disconnect:', reason);
   });
   socket.io.on('reconnect_attempt', (n: number) => {
@@ -51,7 +47,7 @@ export function connectSocket(initDataRaw: string, userJson?: string) {
   socket.io.on('reconnect', (n: number) => {
     console.log('[socket] reconnect success after attempts:', n);
   });
-  socket.io.on('reconnect_error', (err) => {
+  socket.io.on('reconnect_error', (err: any) => {
     console.error('[socket] reconnect_error:', err?.message ?? err);
   });
 
