@@ -34,28 +34,167 @@ class TimerRegistryMock {
 
 // Prisma mock: supplies a board and a prompt/answer for questions
 class PrismaMock {
-  category = {
-    findMany: async () => {
-      return [0, 1, 2, 3].map((i) => ({
-        title: `Cat ${i + 1}`,
-        questions: [100, 200, 300, 400, 500].map((v) => ({ value: v })),
+  private _cats = [0, 1, 2, 3].map((i) => ({ id: `c${i + 1}`, title: `Cat ${i + 1}` }));
+  private _qs: Record<string, { id: string; value: number; prompt: string; canonicalAnswer: string; rawAnswer: string }[]> = {};
+  private _superByQuestion: Record<string, { id: string; questionId: string; options: string[]; lastUsedAt: Date | null; enabled: boolean }[]> = {};
+  private _rooms = new Set<string>();
+  private _sessions: { id: string; roomId: string; status: 'active' | 'completed'; startedAt: Date; endedAt?: Date }[] = [];
+  private _roomSuperCells: { id: string; sessionId: string; round: number | null; categoryId: string; value: number; superQuestionId: string }[] = [];
+
+  constructor() {
+    for (const c of this._cats) {
+      this._qs[c.id] = [100, 200, 300, 400, 500].map((v, idx) => ({
+        id: `${c.id}-q${idx + 1}`,
+        value: v,
+        prompt: `Prompt ${c.title} ${v}`,
+        canonicalAnswer: `Ans-${c.title}-${v}`,
+        rawAnswer: `Ans-${c.title}-${v}`,
       }));
+    }
+  }
+
+  $transaction = async (ops: any[]) => {
+    const results = [] as any[];
+    for (const p of ops) results.push(await p);
+    return results;
+  };
+
+  room = {
+    findUnique: async ({ where: { id } }: any) => (this._rooms.has(id) ? { id } : null),
+    upsert: async ({ where: { id }, create: { id: cid } }: any) => {
+      this._rooms.add(id ?? cid);
+      return { id: id ?? cid };
+    },
+  };
+
+  roomSession = {
+    findFirst: async ({ where: { roomId, status } }: any) =>
+      this._sessions.find((s) => s.roomId === roomId && (!status || s.status === status)) || null,
+    create: async ({ data: { roomId } }: any) => {
+      const id = `s-${this._sessions.length + 1}`;
+      const s = { id, roomId, status: 'active' as const, startedAt: new Date() };
+      this._sessions.push(s);
+      return s;
+    },
+    update: async ({ where: { id }, data }: any) => {
+      const s = this._sessions.find((x) => x.id === id);
+      if (s) Object.assign(s, data);
+      return s ?? null;
+    },
+  };
+
+  category = {
+    findMany: async ({ include, select }: any = {}) => {
+      if (include?.questions) {
+        return this._cats.map((c) => ({
+          title: c.title,
+          ...(select?.id ? { id: c.id } : {}),
+          questions: this._qs[c.id].map((q) => ({ value: q.value })),
+        }));
+      }
+      if (select?.id && select?.title) return this._cats.map((c) => ({ id: c.id, title: c.title }));
+      if (select?.id) return this._cats.map((c) => ({ id: c.id }));
+      return this._cats.map((c) => ({ title: c.title }));
     },
     findUnique: async ({ where: { title } }: any) => {
-      if (typeof title === 'string') return { id: 1, title };
+      const c = this._cats.find((x) => x.title === title);
+      return c ? { id: c.id, title: c.title } : null;
+    },
+  };
+
+  question = {
+    findFirst: async ({ where: { categoryId, value }, select }: any) => {
+      const arr = this._qs[categoryId] || [];
+      const q = arr.find((x) => x.value === value) || null;
+      if (!q) return null;
+      if (select?.prompt) return { prompt: q.prompt };
+      if (select?.canonicalAnswer || select?.rawAnswer || select?.answersAccept) {
+        return { canonicalAnswer: q.canonicalAnswer, rawAnswer: q.rawAnswer, answersAccept: [q.canonicalAnswer] };
+      }
+      return q;
+    },
+    findMany: async ({ take, select }: any = {}) => {
+      const flat = Object.values(this._qs).flat();
+      const arr = flat.slice(0, take || flat.length);
+      if (select?.canonicalAnswer || select?.rawAnswer) {
+        return arr.map((q) => ({ canonicalAnswer: q.canonicalAnswer, rawAnswer: q.rawAnswer }));
+      }
+      return arr;
+    },
+  };
+
+  private ensureSuperPool(categoryId: string, value: number) {
+    const q = (this._qs[categoryId] || []).find((x) => x.value === value);
+    if (!q) return [] as any[];
+    const list = (this._superByQuestion[q.id] ||= []);
+    if (list.length === 0) {
+      for (let i = 0; i < 3; i++) {
+        list.push({
+          id: `sq-${q.id}-${i + 1}`,
+          questionId: q.id,
+          options: [q.canonicalAnswer, `D${i}-1`, `D${i}-2`, `D${i}-3`],
+          lastUsedAt: null,
+          enabled: true,
+        });
+      }
+    }
+    return list;
+  }
+
+  superQuestion = {
+    findMany: async ({ where: { enabled, Question }, select, orderBy, take }: any) => {
+      const list = this.ensureSuperPool(Question.categoryId, Question.value).filter((s) => (enabled ? s.enabled : true));
+      let arr = [...list];
+      arr.sort((a, b) => {
+        const av = a.lastUsedAt ? a.lastUsedAt.getTime() : -1;
+        const bv = b.lastUsedAt ? b.lastUsedAt.getTime() : -1;
+        return av - bv;
+      });
+      if (typeof take === 'number') arr = arr.slice(0, take);
+      if (select?.id || select?.lastUsedAt) return arr.map((s) => ({ id: s.id, lastUsedAt: s.lastUsedAt }));
+      return arr;
+    },
+    findUnique: async ({ where: { id } }: any) => {
+      for (const list of Object.values(this._superByQuestion)) {
+        const sq = list.find((x) => x.id === id);
+        if (sq) return { id: sq.id, options: sq.options } as any;
+      }
+      return null;
+    },
+    update: async ({ where: { id }, data: { lastUsedAt } }: any) => {
+      for (const list of Object.values(this._superByQuestion)) {
+        const sq = list.find((x) => x.id === id);
+        if (sq) {
+          sq.lastUsedAt = lastUsedAt ?? sq.lastUsedAt;
+          return { id: sq.id } as any;
+        }
+      }
       return null;
     },
   };
-  question = {
-    findFirst: async ({ where: { value } }: any) => {
-      return { prompt: `Prompt for ${value}`, canonicalAnswer: 'A', rawAnswer: 'A', answersAccept: ['A'] };
+
+  roomSuperCell = {
+    findMany: async ({ where, select }: any) => {
+      const arr = this._roomSuperCells.filter((r) => (!where?.sessionId || r.sessionId === where.sessionId) && (!where?.round || r.round === where.round));
+      if (select?.superQuestionId) return arr.map((r) => ({ superQuestionId: r.superQuestionId }));
+      if (select?.categoryId || select?.value) return arr.map((r) => ({ categoryId: r.categoryId, value: r.value }));
+      return arr;
     },
-    findMany: async () => {
-      // Provide a pool of distractors for multiple-choice generation
-      return Array.from({ length: 20 }, (_, i) => ({
-        canonicalAnswer: `Ans${i + 1}`,
-        rawAnswer: `Ans${i + 1}`,
-      }));
+    findFirst: async ({ where }: any) =>
+      this._roomSuperCells.find(
+        (r) => r.sessionId === where.sessionId && r.categoryId === where.categoryId && r.value === where.value,
+      ) || null,
+    create: async ({ data }: any) => {
+      const id = `rsc-${this._roomSuperCells.length + 1}`;
+      const rec = { id, sessionId: data.sessionId, round: data.round ?? null, categoryId: data.categoryId, value: data.value, superQuestionId: data.superQuestionId };
+      if (
+        this._roomSuperCells.some((r) => r.sessionId === rec.sessionId && r.categoryId === rec.categoryId && r.value === rec.value) ||
+        this._roomSuperCells.some((r) => r.sessionId === rec.sessionId && r.superQuestionId === rec.superQuestionId)
+      ) {
+        throw new Error('Unique constraint violation (mock)');
+      }
+      this._roomSuperCells.push(rec);
+      return rec;
     },
   };
 }

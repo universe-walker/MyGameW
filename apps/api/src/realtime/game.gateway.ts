@@ -23,7 +23,9 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   constructor(private redis: RedisService, private engine: BotEngineService) {}
 
   afterInit(server: Server) {
-    this.engine.setServer(server);
+    if (this.engine && typeof (this.engine as any).setServer === 'function') {
+      this.engine.setServer(server);
+    }
   }
 
   handleConnection(client: Socket) {

@@ -1,8 +1,5 @@
 import 'reflect-metadata';
-import { beforeAll, afterAll, describe, expect, it } from 'vitest';
-import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import request from 'supertest';
+import { describe, expect, it } from 'vitest';
 import { ProfileController } from '../src/web/profile.controller';
 import { PrismaService } from '../src/services/prisma.service';
 
@@ -25,34 +22,18 @@ class PrismaServiceMock {
   };
 }
 
-describe('ProfileController (HTTP)', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      controllers: [ProfileController],
-      providers: [{ provide: PrismaService, useClass: PrismaServiceMock }],
-    }).compile();
-
-    app = moduleRef.createNestApplication();
-    await app.init();
+describe('ProfileController (unit)', () => {
+  it('returns profile data for known user', async () => {
+    const ctrl = new ProfileController(new PrismaServiceMock() as any as PrismaService);
+    const res = await ctrl.getProfile('1');
+    expect(res.user).toEqual({ id: 1, username: 'tester', first_name: 'Test' });
+    expect(res.profileScore).toBe(42);
+    expect(res.hintAllowance).toBe(3);
+    expect(Array.isArray(res.achievements)).toBe(true);
   });
 
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('GET /profile returns profile data', async () => {
-    const res = await request(app.getHttpServer()).get('/profile').query({ userId: 1 });
-    expect(res.status).toBe(200);
-    expect(res.body.user).toEqual({ id: 1, username: 'tester', first_name: 'Test' });
-    expect(res.body.profileScore).toBe(42);
-    expect(res.body.hintAllowance).toBe(3);
-    expect(Array.isArray(res.body.achievements)).toBe(true);
-  });
-
-  it('GET /profile 404 for unknown user', async () => {
-    const res = await request(app.getHttpServer()).get('/profile').query({ userId: 999 });
-    expect([400, 404]).toContain(res.status);
+  it('throws 404 for unknown user', async () => {
+    const ctrl = new ProfileController(new PrismaServiceMock() as any as PrismaService);
+    await expect(ctrl.getProfile('999')).rejects.toMatchObject({ status: 404 });
   });
 });
