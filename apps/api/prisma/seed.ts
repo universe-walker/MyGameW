@@ -344,8 +344,8 @@ async function seed() {
     }
 
     for (const q of cat.questions) {
-      const answersAccept = q.answersAccept ?? [];
-      const answersReject = q.answersReject ?? [];
+      const answersAccept = (q as any).answersAccept ?? [];
+      const answersReject = (q as any).answersReject ?? [];
       const canonical = (q as any).canonicalAnswer || answersAccept[0] || '';
       if (!canonical) {
         throw new Error(`Question '${q.prompt}' has no canonical answer or accept list`);
@@ -370,9 +370,98 @@ async function seed() {
   }
 }
 
+// --- SuperQuestion seeding (test content) ---
+async function seedSuperQuestionsMedical() {
+  // Pick medical-related categories by tags
+  const medCats = await prisma.category.findMany({ where: { tags: { hasSome: ['pharm', 'anat', 'med'] } } });
+  if (medCats.length === 0) {
+    console.log('No medical categories found by tags; skipping SuperQuestion seeding');
+    return;
+  }
+
+  // Helper to get a question by value in category
+  async function getBaseQuestion(catId: string, value: number) {
+    return prisma.question.findFirst({ where: { categoryId: catId, value }, orderBy: { createdAt: 'asc' } });
+  }
+
+  // Collect up to 4 base questions: prefer values 200 and 400 across categories
+  const targets: { categoryId: string; value: number; qId: string; correct: string }[] = [];
+  for (const c of medCats) {
+    for (const val of [200, 400]) {
+      if (targets.length >= 4) break;
+      const base = await getBaseQuestion(c.id, val);
+      if (!base) continue;
+      const correct = (base as any).canonicalAnswer || (base as any).rawAnswer || '';
+      if (!correct) continue;
+      // Avoid duplicates by questionId
+      if (targets.some((t) => t.qId === base.id)) continue;
+      targets.push({ categoryId: c.id, value: val, qId: base.id, correct: String(correct) });
+    }
+    if (targets.length >= 4) break;
+  }
+  if (targets.length === 0) {
+    console.log('No base questions found for SuperQuestion seeding');
+    return;
+  }
+
+  // Preload distractor pool (answers from other questions)
+  const distractorPoolRaw = await prisma.question.findMany({
+    take: 100,
+    orderBy: { createdAt: 'asc' },
+    select: { canonicalAnswer: true, rawAnswer: true },
+  });
+  const normalize = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const distractorPool = Array.from(
+    new Set(
+      distractorPoolRaw
+        .map((q) => String((q as any).canonicalAnswer || (q as any).rawAnswer || ''))
+        .filter((s) => !!s && s.trim().length > 0),
+    ),
+  );
+
+  const createdIds: string[] = [];
+  for (const t of targets) {
+    // Skip if a SuperQuestion already exists for this base question
+    const exists = await prisma.superQuestion.findFirst({ where: { questionId: t.qId } });
+    if (exists) continue;
+
+    // Build 3 distractors different from correct
+    const correctNorm = normalize(t.correct);
+    const distractors: string[] = [];
+    const pool = distractorPool.filter((a) => normalize(a) !== correctNorm);
+    while (distractors.length < 3 && pool.length > 0) {
+      const idx = Math.floor(Math.random() * pool.length);
+      const [pick] = pool.splice(idx, 1);
+      if (distractors.every((d) => normalize(d) !== normalize(pick))) distractors.push(pick);
+    }
+    while (distractors.length < 3) distractors.push('—');
+    const opts = [t.correct, ...distractors.slice(0, 3)];
+    // Shuffle options
+    for (let i = opts.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [opts[i], opts[j]] = [opts[j], opts[i]];
+    }
+    const correctIndex = opts.findIndex((o) => normalize(o) === correctNorm);
+
+    const sq = await prisma.superQuestion.create({
+      data: {
+        questionId: t.qId,
+        enabled: true,
+        options: opts as unknown as any, // Prisma Json type
+        correctIndex: correctIndex >= 0 ? correctIndex : 0,
+        locale: 'ru',
+        tags: ['medical'],
+      },
+    });
+    createdIds.push(sq.id);
+  }
+  console.log(`Seeded ${createdIds.length} SuperQuestion(s) [medical]`);
+}
+
 seed()
   .then(async () => {
     console.log('Seeded categories and questions');
+    await seedSuperQuestionsMedical();
     await prisma.$disconnect();
   })
   .catch(async (e) => {

@@ -24,6 +24,7 @@ model Room {
   solo       Boolean      @default(false)
   botCount   Int          @default(0)
   BotInstance BotInstance[]
+  sessions   RoomSession[]
 }
 
 model RoomPlayer {
@@ -49,6 +50,7 @@ model Category {
   title     String     @db.VarChar(255) @unique
   tags      String[]
   questions Question[]
+  superCells RoomSuperCell[]
 }
 
 model Question {
@@ -68,8 +70,10 @@ model Question {
   // Relation to Category
   categoryId       String?
   Category         Category?     @relation(fields: [categoryId], references: [id])
+  SuperQuestions   SuperQuestion[]
 
   @@index([categoryId])
+  @@index([categoryId, value])
 }
 
 // New: BillingPurchase and UserMeta
@@ -118,3 +122,77 @@ model BotInstance {
   @@index([roomId])
 }
 
+// --- SuperQuestion & Session Models ---
+enum RoomSessionStatus {
+  active
+  completed
+}
+
+model SuperQuestion {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+
+  // Link to base Question; category/value derived from Question
+  questionId   String
+  Question     Question  @relation(fields: [questionId], references: [id])
+
+  enabled      Boolean  @default(true)
+
+  // Options payload and correct index
+  options      Json     // JSON array of options
+  correctIndex Int
+
+  // Optional metadata for rotation and filtering
+  locale       String?   @db.VarChar(10)
+  tags         String[]
+  difficulty   Int?      // 1..5 (optional policy)
+  weight       Int?      // for weighted selection
+  explanation  String?   @db.Text
+  lastUsedAt   DateTime?
+
+  // Audit
+  createdBy    BigInt?
+
+  // Backref: assignments within sessions
+  SuperCells   RoomSuperCell[]
+
+  @@index([questionId])
+}
+
+// Scopes a "game session" across one or more rounds in a room
+model RoomSession {
+  id         String            @id @default(uuid())
+  roomId     String
+  startedAt  DateTime          @default(now())
+  endedAt    DateTime?
+  status     RoomSessionStatus @default(active)
+
+  Room       Room              @relation(fields: [roomId], references: [id])
+  SuperCells RoomSuperCell[]
+
+  @@index([roomId])
+}
+
+// Assignment of a SuperQuestion to a concrete board cell within a session
+model RoomSuperCell {
+  id              String   @id @default(uuid())
+  sessionId       String
+  // Optional round reference if rounds are tracked explicitly
+  round           Int?
+  categoryId      String
+  value           Int
+  superQuestionId String
+  assignedAt      DateTime @default(now())
+
+  Session      RoomSession   @relation(fields: [sessionId], references: [id])
+  Category     Category      @relation(fields: [categoryId], references: [id])
+  SuperQuestion SuperQuestion @relation(fields: [superQuestionId], references: [id])
+
+  // Non‑repetition within a session
+  @@unique([sessionId, categoryId, value])
+  @@unique([sessionId, superQuestionId])
+
+  @@index([sessionId])
+  @@index([categoryId, value])
+  @@index([superQuestionId])
+}

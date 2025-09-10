@@ -21,6 +21,8 @@ type RoomRuntime = {
   questionOptions?: string[];
   // Flag: current question is Super-game
   isSuperQuestion?: boolean;
+  // Active DB session id for this room (spans multiple rounds)
+  sessionId?: string;
   // Scoreboard for the room (playerId -> score)
   scores?: Record<number, number>;
   // Whether the last submitted answer (by activePlayerId) was correct
@@ -97,8 +99,10 @@ export class BotEngineService {
       superCells: new Map(),
     };
     this.rooms.set(roomId, rr);
-    // Ensure board is loaded and emit to clients
-    void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
+    // Ensure DB session + board is ready and emit to clients
+    void this.ensureSession(roomId)
+      .then(() => this.ensureBoard(roomId))
+      .then(() => this.emitBoardState(roomId));
     // Dynamic prepare window depending on whether humans are present
     void this.schedulePrepare(roomId);
     this.telemetry.soloStarted(roomId);
@@ -109,6 +113,12 @@ export class BotEngineService {
     if (!rr) return;
     rr.running = false;
     this.timers.clearAll(roomId);
+    // Mark DB session as completed if present
+    if (rr.sessionId) {
+      void this.prisma.roomSession
+        .update({ where: { id: rr.sessionId }, data: { status: 'completed', endedAt: new Date() } })
+        .catch(() => undefined);
+    }
     this.rooms.delete(roomId);
     this.botPlayerIds.delete(roomId);
     this.nextBotId.delete(roomId);
@@ -316,8 +326,8 @@ export class BotEngineService {
         .sort((a: number, b: number) => a - b)
         .slice(0, 5),
     }));
-    // Seed random Super cells for the round if not seeded yet
-    await this.seedSuperForRound(roomId);
+    // Ensure Super assignments for this round exist in DB and sync into runtime
+    await this.ensureSuperAssignmentsForRound(roomId);
   }
 
   private async loadQuestion(categoryTitle: string, value: number) {
@@ -397,7 +407,7 @@ export class BotEngineService {
     rr.isSuperQuestion = this.shouldTriggerSuper(rr, categoryTitle, value);
     if (rr.isSuperQuestion) {
       try {
-        rr.questionOptions = await this.buildSuperOptions(categoryTitle, value);
+        rr.questionOptions = await this.buildSuperOptionsDbFirst(roomId, categoryTitle, value);
       } catch {
         rr.isSuperQuestion = false;
         rr.questionOptions = undefined;
@@ -710,6 +720,114 @@ export class BotEngineService {
     }
 
     rr.superCells.set(round, picks);
+  }
+
+  // DB-backed: ensure RoomSession exists and Super assignments are persisted per round.
+  // Mirrors the assignments into rr.superCells for fast checks.
+  private async ensureSuperAssignmentsForRound(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr?.board) return;
+    await this.ensureSession(roomId);
+    const round = rr.round ?? 1;
+    rr.superCells = rr.superCells ?? new Map();
+    if (rr.superCells.has(round)) return;
+
+    const categories = await this.prisma.category.findMany({ select: { id: true, title: true } });
+    const catByTitle = new Map(categories.map((c) => [c.title, c.id] as const));
+    const sessionId = rr.sessionId;
+    if (!sessionId) return;
+
+    const existing = await this.prisma.roomSuperCell.findMany({ where: { sessionId, round } });
+    const toKey = (catId: string, value: number) => {
+      const title = categories.find((c) => c.id === catId)?.title;
+      return title ? `${title}:${value}` : '';
+    };
+    let picks = new Set<string>(existing.map((e) => toKey(e.categoryId, e.value)).filter(Boolean) as string[]);
+
+    if (picks.size === 0) {
+      const allowedByRound: Record<number, number[]> = { 1: [400], 2: [200, 400] };
+      const allowedValues = allowedByRound[round] ?? [400];
+      type Cell = { title: string; value: number; categoryId: string };
+      const allCells: Cell[] = [];
+      for (const bc of rr.board) {
+        const cid = catByTitle.get(bc.title);
+        if (!cid) continue;
+        for (const v of bc.values) {
+          if (!allowedValues.includes(v)) continue;
+          allCells.push({ title: bc.title, value: v, categoryId: cid });
+        }
+      }
+      const used = new Set((await this.prisma.roomSuperCell.findMany({ where: { sessionId }, select: { superQuestionId: true } })).map((x) => x.superQuestionId));
+
+      const pickSuperForCell = async (cell: Cell) => {
+        const pool = await this.prisma.superQuestion.findMany({
+          where: { enabled: true, Question: { categoryId: cell.categoryId, value: cell.value } },
+          select: { id: true, lastUsedAt: true },
+          orderBy: [{ lastUsedAt: 'asc' }],
+          take: 50,
+        });
+        const candidates = pool.filter((sq) => !used.has(sq.id));
+        if (!candidates.length) return null;
+        const top = candidates.slice(0, Math.min(5, candidates.length));
+        return top[Math.floor(this.rand() * top.length)]!;
+      };
+
+      const already = new Set<string>();
+      for (const val of allowedValues) {
+        const cells = allCells.filter((c) => c.value === val && !already.has(`${c.title}:${c.value}`));
+        let chosenCell: Cell | null = null;
+        let chosenSq: { id: string } | null = null;
+        for (const cell of cells) {
+          const sq = await pickSuperForCell(cell);
+          if (sq) { chosenCell = cell; chosenSq = sq; break; }
+        }
+        if (!chosenCell || !chosenSq) continue;
+        try {
+          await this.prisma.$transaction([
+            this.prisma.roomSuperCell.create({ data: { sessionId, round, categoryId: chosenCell.categoryId, value: chosenCell.value, superQuestionId: chosenSq.id } }),
+            this.prisma.superQuestion.update({ where: { id: chosenSq.id }, data: { lastUsedAt: new Date() } }),
+          ]);
+          used.add(chosenSq.id);
+          already.add(`${chosenCell.title}:${chosenCell.value}`);
+        } catch {}
+      }
+      const newly = await this.prisma.roomSuperCell.findMany({ where: { sessionId, round } });
+      picks = new Set<string>(newly.map((e) => toKey(e.categoryId, e.value)).filter(Boolean) as string[]);
+    }
+
+    rr.superCells.set(round, picks);
+  }
+
+  private async ensureSession(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr) return;
+    if (rr.sessionId) return;
+    await this.prisma.room.upsert({ where: { id: roomId }, create: { id: roomId }, update: {} });
+    let session = await this.prisma.roomSession.findFirst({ where: { roomId, status: 'active' } });
+    if (!session) session = await this.prisma.roomSession.create({ data: { roomId } });
+    rr.sessionId = session.id;
+  }
+
+  // Try to fetch options from assigned SuperQuestion; fallback to generated options
+  private async buildSuperOptionsDbFirst(roomId: string, categoryTitle: string, value: number) {
+    try {
+      const rr = this.rooms.get(roomId);
+      const sessionId = rr?.sessionId;
+      if (sessionId) {
+        const cat = await this.prisma.category.findUnique({ where: { title: categoryTitle } });
+        if (cat) {
+          const assigned = await this.prisma.roomSuperCell.findFirst({ where: { sessionId, categoryId: cat.id, value } });
+          if (assigned) {
+            const sq = await this.prisma.superQuestion.findUnique({ where: { id: assigned.superQuestionId } });
+            const arr = Array.isArray((sq as any)?.options)
+              ? ((sq as any).options as any[]).map((x) => (typeof x === 'string' ? x : String(x?.text ?? ''))).filter(Boolean)
+              : [];
+            if (arr.length >= 2) return arr.slice(0, 4);
+          }
+        }
+      }
+    } catch {}
+    return this.buildSuperOptions(categoryTitle, value);
   }
 
   private async buildSuperOptions(categoryTitle: string, value: number) {
