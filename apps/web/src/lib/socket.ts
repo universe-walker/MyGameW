@@ -4,7 +4,7 @@ import { apiBase } from './api';
 
 let socket: Socket | null = null;
 
-export function connectSocket(initDataRaw: string, userJson?: string) {
+export function connectSocket(initDataRaw: string) {
   const nsUrl = `${apiBase}/game`;
 
   if (socket) {
@@ -19,13 +19,12 @@ export function connectSocket(initDataRaw: string, userJson?: string) {
 
   console.log('[socket] connectSocket: creating new socket', {
     url: nsUrl,
-    authHasUser: Boolean(userJson),
     initDataRawLen: initDataRaw?.length ?? 0,
   });
 
   socket = io(nsUrl, {
     transports: ['websocket'],
-    auth: { initDataRaw, user: userJson },
+    auth: { initDataRaw },
   }) as unknown as Socket;
 
   // Lifecycle logging

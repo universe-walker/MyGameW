@@ -63,7 +63,7 @@ export function useSocket() {
       const initDataRaw = getInitDataRaw() ?? '';
       const user = getUser();
       console.log('[ui] connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
-      socket = connectSocket(initDataRaw, user ? JSON.stringify(user) : undefined);
+      socket = connectSocket(initDataRaw);
       setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard, setReveal);
     }
     return socket;

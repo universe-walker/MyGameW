@@ -10,10 +10,10 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RedisService } from '../services/redis.service';
-import { ZRoomsJoinReq } from '@mygame/shared';
+import { ZRoomsJoinReq, ZRoomsLeaveReq, ZBuzzerPressReq, ZAnswerSubmitReq, ZBoardPickReq } from '@mygame/shared';
 import crypto from 'crypto';
 import { BotEngineService } from '../services/bot-engine.service';
-import { verifyInitData } from '../services/telegram-auth.util';
+import { parseInitData, verifyInitData } from '../services/telegram-auth.util';
 
 @WebSocketGateway({ namespace: '/game', cors: { origin: true, credentials: true } })
 export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
@@ -39,6 +39,21 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       }
       // In development, allow connection without Telegram auth
     }
+    // When Telegram initData is valid (or dev override enabled), parse and store
+    // the authenticated user on the socket. Never trust client-provided auth.user.
+    try {
+      if (initDataRaw && verifyInitData(initDataRaw, token).ok) {
+        const data = parseInitData(initDataRaw);
+        const userJson = data.user ? decodeURIComponent(data.user) : null;
+        if (userJson) {
+          const user = JSON.parse(userJson) as { id: number; username?: string; first_name?: string };
+          (client as any).data = (client as any).data || {};
+          (client as any).data.user = { id: user.id, username: user.username, first_name: user.first_name };
+        }
+      }
+    } catch {
+      // ignore parse errors, socket remains unauthenticated user (treated as anon in dev)
+    }
   }
 
   @SubscribeMessage('rooms:create')
@@ -56,9 +71,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!parsed.success) return;
     const { roomId } = parsed.data;
     await client.join(roomId);
-    const userJson = client.handshake.auth?.user as string | undefined;
-    const user = userJson ? (JSON.parse(userJson) as { id: number; first_name: string }) : null;
-    const player = user ? { id: user.id, name: user.first_name } : { id: 0, name: 'Anon' };
+    const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
+    const player = user ? { id: user.id, name: user.first_name || 'User' } : { id: 0, name: 'Anon' };
     await this.redis.client.sadd(`room:${roomId}:players`, JSON.stringify(player));
     const all = await this.redis.client.smembers(`room:${roomId}:players`);
     const players = all.map((p) => JSON.parse(p) as { id: number; name: string; bot?: boolean });
@@ -75,12 +89,12 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('rooms:leave')
-  async onRoomsLeave(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
-    const roomId = payload?.roomId;
-    if (!roomId) return;
+  async onRoomsLeave(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
+    const parsed = ZRoomsLeaveReq.safeParse(payload);
+    if (!parsed.success) return;
+    const roomId = parsed.data.roomId;
     // Remove player from Redis set if we can identify them
-    const userJson = client.handshake.auth?.user as string | undefined;
-    const user = userJson ? (JSON.parse(userJson) as { id: number; first_name?: string }) : null;
+    const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
     const all = await this.redis.client.smembers(`room:${roomId}:players`);
     const playerToRemove = all.find((p) => {
       try {
@@ -126,33 +140,34 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('buzzer:press')
-  onBuzzerPress(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string }) {
-    const userJson = client.handshake.auth?.user as string | undefined;
-    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
-    if (!payload?.roomId) return;
+  onBuzzerPress(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
+    const parsed = ZBuzzerPressReq.safeParse(payload);
+    if (!parsed.success) return;
+    const user = (client as any).data?.user as { id: number } | undefined;
     const playerId = user?.id ?? 0; // allow Anon in dev to play as id 0
-    this.engine.onHumanBuzzer(payload.roomId, playerId);
+    this.engine.onHumanBuzzer(parsed.data.roomId, playerId);
   }
 
   @SubscribeMessage('answer:submit')
-  onAnswerSubmit(@ConnectedSocket() client: Socket, @MessageBody() payload: { roomId: string; text: string }) {
-    const userJson = client.handshake.auth?.user as string | undefined;
-    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
-    if (!payload?.roomId) return;
+  onAnswerSubmit(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
+    const parsed = ZAnswerSubmitReq.safeParse(payload);
+    if (!parsed.success) return;
+    const user = (client as any).data?.user as { id: number } | undefined;
     const playerId = user?.id ?? 0; // allow Anon in dev
-    this.engine.onHumanAnswer(payload.roomId, playerId, payload.text);
+    this.engine.onHumanAnswer(parsed.data.roomId, playerId, parsed.data.text);
   }
 
   @SubscribeMessage('board:pick')
   async onBoardPick(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { roomId: string; category: string; value: number },
+    @MessageBody() payload: unknown,
   ) {
-    if (!payload?.roomId || !payload?.category || typeof payload?.value !== 'number') return;
-    const userJson = client.handshake.auth?.user as string | undefined;
-    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
+    const parsed = ZBoardPickReq.safeParse(payload);
+    if (!parsed.success) return;
+    const user = (client as any).data?.user as { id: number } | undefined;
     const pickerId = user?.id ?? 0;
-    await this.engine.onBoardPick(payload.roomId, payload.category, payload.value, pickerId);
+    const { roomId, category, value } = parsed.data;
+    await this.engine.onBoardPick(roomId, category, value, pickerId);
   }
 
   @SubscribeMessage('ping')
@@ -161,8 +176,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   async handleDisconnect(client: Socket) {
-    const userJson = client.handshake.auth?.user as string | undefined;
-    const user = userJson ? (JSON.parse(userJson) as { id: number }) : null;
+    const user = (client as any).data?.user as { id: number } | undefined;
     // On disconnect, we need to find which room the user was in and remove them.
     // This is important for preventing users from being stuck in a room across sessions.
     const userId = user?.id ?? 0; // 0 for Anon players in dev

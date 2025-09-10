@@ -16,6 +16,16 @@ export const ZRoomsCreateRes = z.object({ roomId: z.string().uuid() });
 // Solo: explicit create response (alias by contract name in TZ)
 export const ZCreateSoloRes = z.object({ roomId: z.string().uuid() });
 export const ZRoomsJoinReq = z.object({ roomId: z.string().uuid() });
+export const ZRoomsLeaveReq = z.object({ roomId: z.string().uuid() });
+
+// WS controls
+export const ZBuzzerPressReq = z.object({ roomId: z.string().uuid() });
+export const ZAnswerSubmitReq = z.object({ roomId: z.string().uuid(), text: z.string().min(1) });
+export const ZBoardPickReq = z.object({
+  roomId: z.string().uuid(),
+  category: z.string().min(1),
+  value: z.number().int(),
+});
 
 // Billing
 export const ZInvoiceCreateReq = z.object({
@@ -54,6 +64,10 @@ export type TInitVerifyRes = z.infer<typeof ZInitVerifyRes>;
 export type TRoomsCreateRes = z.infer<typeof ZRoomsCreateRes>;
 export type TCreateSoloRes = z.infer<typeof ZCreateSoloRes>;
 export type TRoomsJoinReq = z.infer<typeof ZRoomsJoinReq>;
+export type TRoomsLeaveReq = z.infer<typeof ZRoomsLeaveReq>;
+export type TBuzzerPressReq = z.infer<typeof ZBuzzerPressReq>;
+export type TAnswerSubmitReq = z.infer<typeof ZAnswerSubmitReq>;
+export type TBoardPickReq = z.infer<typeof ZBoardPickReq>;
 export type TInvoiceCreateReq = z.infer<typeof ZInvoiceCreateReq>;
 export type TInvoiceCreateRes = z.infer<typeof ZInvoiceCreateRes>;
 export type TProfileRes = z.infer<typeof ZProfileRes>;
