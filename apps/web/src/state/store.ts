@@ -24,6 +24,10 @@ type State = {
   question?: CurrentQuestion;
   scores: Record<number, number>;
   revealAnswer: string | null;
+  // current word mask for placeholders
+  answerMask: string | null;
+  answerLen: number;
+  nearMissAt: number | null;
   // Pause state (client-side augmentation for solo mode)
   paused: boolean;
   pauseOffsetMs: number; // accumulated paused duration for current phase
@@ -39,6 +43,8 @@ type State = {
   setBoard: (categories: BoardCategory[]) => void;
   setBotStatus: (playerId: number, status: string) => void;
   setRevealAnswer: (text: string | null) => void;
+  setAnswerMask: (mask: string | null, len?: number) => void;
+  setNearMiss: () => void;
   setPaused: (paused: boolean) => void;
   leaveRoom: () => void;
 };
@@ -55,6 +61,9 @@ export const useGameStore = create<State>((set) => ({
   question: undefined,
   scores: {},
   revealAnswer: null,
+  answerMask: null,
+  answerLen: 0,
+  nearMissAt: null,
   paused: false,
   pauseOffsetMs: 0,
   pauseStartedAt: null,
@@ -74,6 +83,9 @@ export const useGameStore = create<State>((set) => ({
   setBoard: (categories) => set({ boardCategories: categories }),
   setBotStatus: (playerId, status) => set((s) => ({ botStatuses: { ...s.botStatuses, [playerId]: status } })),
   setRevealAnswer: (text) => set({ revealAnswer: text }),
+  setAnswerMask: (mask, len) =>
+    set((s) => ({ answerMask: mask, answerLen: typeof len === 'number' ? len : s.answerLen })),
+  setNearMiss: () => set({ nearMissAt: Date.now() }),
   setPaused: (paused) =>
     set((s) => {
       if (paused) {

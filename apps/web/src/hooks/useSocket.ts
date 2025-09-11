@@ -11,6 +11,8 @@ function setupSocketListeners(
   setBotStatus: any,
   setBoard: any,
   setReveal: (text: string | null) => void,
+  setMask: (mask: string | null, len?: number) => void,
+  onNearMiss: () => void,
 ) {
   console.log('[socket] setupSocketListeners: attaching listeners');
   socket.off('room:state');
@@ -25,6 +27,7 @@ function setupSocketListeners(
     console.log('[socket] event game:phase', p);
     setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question, p.scores as any);
     if (p.phase === 'prepare' || p.phase === 'answer_wait') setReveal(null);
+    if (p.phase !== 'answer_wait') setMask(null, 0);
   });
   socket.on('bot:status', (b: TBotStatus) => {
     console.log('[socket] event bot:status', b);
@@ -56,6 +59,8 @@ export function useSocket() {
   const setBoard = useGameStore((s) => s.setBoard);
   const setBotStatus = useGameStore((s) => s.setBotStatus);
   const setReveal = useGameStore((s) => s.setRevealAnswer);
+  const setMask = useGameStore((s) => s.setAnswerMask);
+  const onNearMiss = useGameStore((s) => s.setNearMiss);
 
   const connect = useCallback(() => {
     let socket = getSocket();
@@ -64,7 +69,7 @@ export function useSocket() {
       const user = getUser();
       console.log('[ui] connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
       socket = connectSocket(initDataRaw);
-      setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard, setReveal);
+      setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard, setReveal, setMask, onNearMiss);
     }
     return socket;
   }, [setRoom, setPhase, setBotStatus, setBoard]);
@@ -74,5 +79,13 @@ export function useSocket() {
   }, []);
 
   return { connect, disconnect, getSocket };
+  socket.on('word:mask', (payload: any) => {
+    console.log('[socket] event word:mask', payload);
+    if (payload && typeof payload.mask === 'string') setMask(payload.mask, Number(payload.len) || 0);
+  });
+  socket.on('answer:near_miss', (_p: any) => {
+    console.log('[socket] event answer:near_miss');
+    onNearMiss();
+  });
 }
 

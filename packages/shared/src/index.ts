@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Socket as IOSocket } from 'socket.io-client';
+// Avoid coupling shared package to socket.io-client types at build time
 
 export const ZInitVerifyReq = z.object({ initDataRaw: z.string().min(1) });
 export const ZInitVerifyRes = z.object({
@@ -16,7 +16,6 @@ export const ZRoomsCreateRes = z.object({ roomId: z.string().uuid() });
 // Solo: explicit create response (alias by contract name in TZ)
 export const ZCreateSoloRes = z.object({ roomId: z.string().uuid() });
 export const ZRoomsJoinReq = z.object({ roomId: z.string().uuid() });
-export const ZRoomsLeaveReq = z.object({ roomId: z.string().uuid() });
 export const ZSoloPauseReq = z.object({ roomId: z.string().uuid() });
 export const ZSoloResumeReq = z.object({ roomId: z.string().uuid() });
 export const ZRoomsLeaveReq = z.object({ roomId: z.string().uuid() });
@@ -67,7 +66,6 @@ export type TInitVerifyRes = z.infer<typeof ZInitVerifyRes>;
 export type TRoomsCreateRes = z.infer<typeof ZRoomsCreateRes>;
 export type TCreateSoloRes = z.infer<typeof ZCreateSoloRes>;
 export type TRoomsJoinReq = z.infer<typeof ZRoomsJoinReq>;
-export type TRoomsLeaveReq = z.infer<typeof ZRoomsLeaveReq>;
 export type TSoloPauseReq = z.infer<typeof ZSoloPauseReq>;
 export type TSoloResumeReq = z.infer<typeof ZSoloResumeReq>;
 export type TRoomsLeaveReq = z.infer<typeof ZRoomsLeaveReq>;
@@ -158,12 +156,24 @@ export type TSocketServerToClientEvents = {
   'game:phase': (payload: TGamePhaseEvent) => void;
   'bot:status': (payload: TBotStatus) => void;
   'board:state': (payload: TBoardState) => void;
+  // Masked word for current question (for UI placeholders)
+  'word:mask': (payload: TQuestionRevealWord) => void;
   'word:reveal': (payload: { position: number; char: string }) => void;
   'answer:reveal': (payload: TAnswerReveal) => void;
+  // Near-miss notification to allow retry without penalty
+  'answer:near_miss': (payload: { message: string }) => void;
   pong: () => void;
 };
 
 // Fully-typed socket shared across client and server
-export type Socket = IOSocket<TSocketServerToClientEvents, TSocketClientToServerEvents>;
+export type Socket = {
+  emit: (...args: any[]) => void;
+  on: (...args: any[]) => void;
+  off: (...args: any[]) => void;
+  id?: string;
+  connected?: boolean;
+  io?: any;
+  disconnect: () => void;
+};
 
 

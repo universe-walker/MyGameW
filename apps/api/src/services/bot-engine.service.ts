@@ -27,6 +27,8 @@ type RoomRuntime = {
   scores?: Record<number, number>;
   // Whether the last submitted answer (by activePlayerId) was correct
   lastAnswerCorrect?: boolean;
+  // Whether the current human answerer already used the 1-letter retry
+  retryUsed?: boolean;
   // Turn order and picking/answering state
   order?: number[];
   pickerIndex?: number; // index in order[] of who selects the question
@@ -170,7 +172,36 @@ export class BotEngineService {
       // Fallback: treat non-empty as correct when DB lookup fails
       correct = typeof text === 'string' && text.trim().length > 0;
     }
-    rr.lastAnswerCorrect = correct;
+    if (correct) {
+      rr.lastAnswerCorrect = true;
+      this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
+      this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterScore(roomId));
+      return;
+    }
+    // Not correct: check near-miss on first attempt to allow retry without penalty
+    try {
+      const q = rr.question;
+      if (!rr.retryUsed && q?.category && typeof q.value === 'number') {
+        const catRec = await this.prisma.category.findUnique({ where: { title: q.category } });
+        const normalized = this.normalizeAnswer(text);
+        if (catRec) {
+          const qr = await this.prisma.question.findFirst({
+            where: { categoryId: catRec.id, value: q.value },
+            select: { canonicalAnswer: true },
+          });
+          const canonical = this.normalizeAnswer(qr?.canonicalAnswer ?? '');
+          if (canonical && normalized) {
+            const near = this.isNearMiss(normalized, canonical);
+            if (near) {
+              rr.retryUsed = true;
+              this.server?.to(roomId).emit('answer:near_miss', { message: 'В слове ошибка, попробуйте ещё раз' } as any);
+              return; // stay in answer_wait
+            }
+          }
+        }
+      }
+    } catch { /* ignore near-miss errors */ }
+    rr.lastAnswerCorrect = false;
     this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
     this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterScore(roomId));
   }
@@ -304,6 +335,82 @@ export class BotEngineService {
     this.server?.to(roomId).emit('board:state', { roomId, categories } as any);
   }
 
+  private buildMaskPayload(answer: string) {
+    // Build mask: letters/digits -> '*', keep spaces and hyphens
+    const chars = Array.from(answer);
+    const isFillable = (ch: string) => /[\p{L}\p{N}]/u.test(ch) && ch !== ' ' && ch !== '-';
+    let len = 0;
+    const mask = chars
+      .map((ch) => {
+        if (ch === ' ' || ch === '-') return ch;
+        if (isFillable(ch)) {
+          len += 1;
+          return '*';
+        }
+        // Hide other punctuation as '*'
+        len += 1;
+        return '*';
+      })
+      .join('');
+    return { len, mask, canReveal: false };
+  }
+
+  private async onEnterAnswerWait(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr) return;
+    // Reset retry flag for the new answerer window
+    rr.retryUsed = false;
+    const activeId = rr.activePlayerId;
+    const isHuman = typeof activeId === 'number' ? activeId >= 0 : false;
+    if (!isHuman) return; // Only reveal mask to humans
+    try {
+      const cat = rr.question?.category;
+      const val = rr.question?.value;
+      if (!cat || typeof val !== 'number') return;
+      const answer = await this.loadAnswer(cat, val);
+      if (!answer) return;
+      const payload = this.buildMaskPayload(answer);
+      this.server?.to(roomId).emit('word:mask', payload as any);
+    } catch {
+      // ignore mask errors
+    }
+  }
+
+  private isNearMiss(a: string, b: string) {
+    // Check if Levenshtein distance is exactly 1 (one insertion, deletion, or substitution)
+    if (a === b) return false;
+    const la = a.length, lb = b.length;
+    const diff = Math.abs(la - lb);
+    if (diff > 1) return false;
+    // If equal length: at most one mismatched position
+    if (la === lb) {
+      let mismatches = 0;
+      for (let i = 0; i < la; i++) {
+        if (a[i] !== b[i]) {
+          mismatches++;
+          if (mismatches > 1) return false;
+        }
+      }
+      return mismatches === 1;
+    }
+    // Ensure a is shorter
+    const s = la < lb ? a : b;
+    const t = la < lb ? b : a;
+    let i = 0, j = 0, edits = 0;
+    while (i < s.length && j < t.length) {
+      if (s[i] === t[j]) {
+        i++; j++;
+      } else {
+        edits++;
+        if (edits > 1) return false;
+        j++; // skip one char in longer string (insertion/deletion)
+      }
+    }
+    // If there is one char left in longer string, that's the single edit
+    if (j < t.length || i < s.length) edits++;
+    return edits === 1;
+  }
+
   private async ensureBoard(roomId: string) {
     const rr = this.rooms.get(roomId);
     if (!rr) return;
@@ -430,6 +537,7 @@ export class BotEngineService {
       ? this.ANSWER_WAIT_BOT_MS
       : this.ANSWER_WAIT_HUMAN_MS;
     this.goto(roomId, 'answer_wait', Date.now() + waitMs);
+    void this.onEnterAnswerWait(roomId);
     if (isBot && typeof pid === 'number') {
       this.scheduleBotThinkAndAnswer(roomId, pid);
     } else {
@@ -565,6 +673,7 @@ export class BotEngineService {
     rr.activePlayerId = pid ?? null;
     const waitMs = this.ANSWER_WAIT_BOT_MS;
     this.goto(roomId, 'answer_wait', Date.now() + waitMs);
+    void this.onEnterAnswerWait(roomId);
     if (typeof pid === 'number') this.scheduleBotThinkAndAnswer(roomId, pid);
   }
 
@@ -642,6 +751,7 @@ export class BotEngineService {
       const isBot = typeof nextId === 'number' ? nextId < 0 : false;
       const wait = isBot ? this.ANSWER_WAIT_BOT_MS : this.ANSWER_WAIT_HUMAN_MS;
       this.goto(roomId, 'answer_wait', Date.now() + wait);
+      void this.onEnterAnswerWait(roomId);
       if (isBot && typeof nextId === 'number') {
         this.scheduleBotThinkAndAnswer(roomId, nextId);
       } else {
