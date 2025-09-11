@@ -37,10 +37,24 @@ function setupSocketListeners(
     console.log('[socket] event board:state', b);
     if (Array.isArray(b?.categories)) setBoard(b.categories);
   });
+  socket.on('word:mask', (payload: any) => {
+    console.log('[socket] event word:mask', payload);
+    if (payload && typeof payload.mask === 'string') setMask(payload.mask, Number(payload.len) || 0);
+  });
 
   socket.on('answer:reveal', (r: any) => {
     console.log('[socket] event answer:reveal', r);
     if (typeof r?.text === 'string') setReveal(r.text);
+  });
+  socket.on('answer:near_miss', (_p: any) => {
+    console.log('[socket] event answer:near_miss');
+    onNearMiss();
+  });
+
+  socket.on('answer:debug', (p: any) => {
+    if (typeof p?.text === 'string') {
+      console.debug('[DEBUG] Correct answer:', p.text);
+    }
   });
 
   // Auto rejoin the room on (re)connect if we have one
@@ -79,13 +93,5 @@ export function useSocket() {
   }, []);
 
   return { connect, disconnect, getSocket };
-  socket.on('word:mask', (payload: any) => {
-    console.log('[socket] event word:mask', payload);
-    if (payload && typeof payload.mask === 'string') setMask(payload.mask, Number(payload.len) || 0);
-  });
-  socket.on('answer:near_miss', (_p: any) => {
-    console.log('[socket] event answer:near_miss');
-    onNearMiss();
-  });
 }
 

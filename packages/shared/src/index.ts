@@ -162,6 +162,8 @@ export type TSocketServerToClientEvents = {
   'answer:reveal': (payload: TAnswerReveal) => void;
   // Near-miss notification to allow retry without penalty
   'answer:near_miss': (payload: { message: string }) => void;
+  // DEV ONLY: send the correct answer for debugging
+  'answer:debug': (payload: { text: string }) => void;
   pong: () => void;
 };
 

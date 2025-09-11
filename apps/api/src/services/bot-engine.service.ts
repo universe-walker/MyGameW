@@ -67,6 +67,8 @@ export class BotEngineService {
   private REVEAL_MS = this.intFromEnv('REVEAL_MS', 2500);
   // Super-game answer window (10–15s recommended)
   private SUPER_WAIT_MS = this.intFromEnv('SUPER_WAIT_MS', 12000);
+  // Dev: emit correct answer for debugging in UI
+  private DEBUG_ANSWER = this.boolFromEnv('DEBUG_ANSWER', false);
 
   constructor(
     private timers: TimerRegistryService,
@@ -371,6 +373,11 @@ export class BotEngineService {
       if (!answer) return;
       const payload = this.buildMaskPayload(answer);
       this.server?.to(roomId).emit('word:mask', payload as any);
+      if (this.DEBUG_ANSWER) {
+        try {
+          this.server?.to(roomId).emit('answer:debug', { text: answer } as any);
+        } catch {}
+      }
     } catch {
       // ignore mask errors
     }
