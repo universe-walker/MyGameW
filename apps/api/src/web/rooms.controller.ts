@@ -1,9 +1,11 @@
-import { Controller, Post } from '@nestjs/common';
+import { Controller, Post, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../services/prisma.service';
 import { RedisService } from '../services/redis.service';
 import { ZRoomsCreateRes } from '@mygame/shared';
 import { randomUUID } from 'crypto';
+import { TelegramAuthGuard } from './telegram-auth.guard';
 
+@UseGuards(TelegramAuthGuard)
 @Controller('rooms')
 export class RoomsController {
   constructor(private prisma: PrismaService, private redis: RedisService) {}

@@ -17,6 +17,8 @@ type RoomRuntime = {
   board?: { title: string; values: number[] }[];
   // Current question info
   question?: { category: string; value: number; prompt: string } | undefined;
+  // DB id of the current question if known (assigned or blitz)
+  questionId?: string;
   // Super-game options for current question (if any)
   questionOptions?: string[];
   // Flag: current question is Super-game
@@ -38,6 +40,18 @@ type RoomRuntime = {
   // Rounds and Super preselected cells per round
   round?: number; // 1-based
   superCells?: Map<number, Set<string>>; // round -> set of "category:value" keys that are Super
+  // Blitz cells per round
+  blitzCells?: Map<number, Set<string>>; // round -> set of "category:value" keys that are Blitz
+  // Pre-assigned base question per board cell to avoid blitz collisions
+  cellAssignments?: Map<number, Map<string, string>>; // round -> map of "category:value" -> questionId
+  // Blitz runtime state
+  blitzActive?: boolean;
+  blitzOwnerId?: number;
+  blitzIndex?: number; // 0-based
+  blitzTotal?: number;
+  blitzBaseValue?: number; // V from picked cell
+  blitzCategory?: string;
+  blitzQuestions?: { id: string; value: number; prompt: string }[];
 };
 
 @Injectable()
@@ -69,6 +83,24 @@ export class BotEngineService {
   private SUPER_WAIT_MS = this.intFromEnv('SUPER_WAIT_MS', 12000);
   // Dev: emit correct answer for debugging in UI
   private DEBUG_ANSWER = this.boolFromEnv('DEBUG_ANSWER', false);
+  // Blitz config
+  private BLITZ_ENABLED = this.boolFromEnv('BLITZ_ENABLED', true);
+  private BLITZ_ROUNDS: number[] = String(process.env.BLITZ_ROUNDS || '2')
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  private BLITZ_CELLS_PER_ROUND = this.intFromEnv('BLITZ_CELLS_PER_ROUND', 1);
+  private BLITZ_COUNT = this.intFromEnv('BLITZ_COUNT', 3);
+  private BLITZ_TIMER_MS = this.intFromEnv('BLITZ_TIMER_MS', 15000);
+  private BLITZ_RETRY_MS = this.intFromEnv('BLITZ_RETRY_MS', 7000);
+  private BLITZ_SCORING_MODE = (process.env.BLITZ_SCORING_MODE || 'by_value') as 'by_value' | 'fixed';
+  private BLITZ_FIXED_CORRECT = this.intFromEnv('BLITZ_FIXED_CORRECT', 200);
+  private BLITZ_CORRECT_FACTOR = Number.isFinite(Number(process.env.BLITZ_CORRECT_FACTOR))
+    ? Number(process.env.BLITZ_CORRECT_FACTOR)
+    : 0.5;
+  private BLITZ_WRONG_FACTOR = Number.isFinite(Number(process.env.BLITZ_WRONG_FACTOR))
+    ? Number(process.env.BLITZ_WRONG_FACTOR)
+    : -0.25;
 
   constructor(
     private timers: TimerRegistryService,
@@ -101,6 +133,8 @@ export class BotEngineService {
       scores: {},
       round: 1,
       superCells: new Map(),
+      blitzCells: new Map(),
+      cellAssignments: new Map(),
     };
     this.rooms.set(roomId, rr);
     // Ensure DB session + board is ready and emit to clients
@@ -151,7 +185,22 @@ export class BotEngineService {
     let correct = false;
     try {
       const q = rr.question;
-      if (q?.category && typeof q.value === 'number') {
+      if (rr.questionId) {
+        const qr = await this.prisma.question.findUnique({
+          where: { id: rr.questionId },
+          select: { canonicalAnswer: true, answersAccept: true, answersReject: true, requireFull: true },
+        });
+        const normalized = this.normalizeAnswer(text);
+        const accepts = (qr?.answersAccept ?? []).map((s) => this.normalizeAnswer(s));
+        const rejects = (qr?.answersReject ?? []).map((s) => this.normalizeAnswer(s));
+        const canonical = this.normalizeAnswer(qr?.canonicalAnswer ?? '');
+        const requireFull = Boolean(qr?.requireFull);
+        if (normalized.length > 0) {
+          if (rejects.includes(normalized)) correct = false;
+          else if (requireFull) correct = accepts.includes(normalized) || (!!canonical && normalized === canonical);
+          else correct = accepts.includes(normalized) || (!!canonical && normalized === canonical);
+        }
+      } else if (q?.category && typeof q.value === 'number') {
         const catRec = await this.prisma.category.findUnique({ where: { title: q.category } });
         if (catRec) {
           const qr = await this.prisma.question.findFirst({
@@ -171,13 +220,18 @@ export class BotEngineService {
         }
       }
     } catch {
-      // Fallback: treat non-empty as correct when DB lookup fails
-      correct = typeof text === 'string' && text.trim().length > 0;
+      // Fallback: если не смогли проверить по БД — считаем ответ неверным,
+      // чтобы избежать ложных начислений очков.
+      correct = false;
     }
     if (correct) {
       rr.lastAnswerCorrect = true;
       this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
-      this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterScore(roomId));
+      if (rr.blitzActive) {
+        this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterBlitzScore(roomId));
+      } else {
+        this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterScore(roomId));
+      }
       return;
     }
     // Not correct: check near-miss on first attempt to allow retry without penalty
@@ -197,6 +251,17 @@ export class BotEngineService {
             if (near) {
               rr.retryUsed = true;
               this.server?.to(roomId).emit('answer:near_miss', { message: 'В слове ошибка, попробуйте ещё раз' } as any);
+              if (rr.blitzActive) {
+                rr.until = Date.now() + this.BLITZ_RETRY_MS;
+                this.emitPhase(roomId, 'answer_wait', rr.until);
+                this.timers.set(roomId, 'phase_answer_wait', this.BLITZ_RETRY_MS, () => {
+                  const rrx = this.rooms.get(roomId);
+                  if (!rrx || !rrx.blitzActive) return;
+                  rrx.lastAnswerCorrect = false;
+                  this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
+                  this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterBlitzScore(roomId));
+                });
+              }
               return; // stay in answer_wait
             }
           }
@@ -205,7 +270,11 @@ export class BotEngineService {
     } catch { /* ignore near-miss errors */ }
     rr.lastAnswerCorrect = false;
     this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
-    this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterScore(roomId));
+    if (rr.blitzActive) {
+      this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterBlitzScore(roomId));
+    } else {
+      this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterScore(roomId));
+    }
   }
 
   // Buzzer phase removed in new turn-based flow
@@ -304,7 +373,17 @@ export class BotEngineService {
         rr.scores = rr.scores || {};
         if (typeof rr.lastAnswerCorrect === 'boolean') {
           let delta = 0;
-          if (rr.lastAnswerCorrect) {
+          if (rr.blitzActive) {
+            const base = rr.blitzBaseValue ?? val;
+            if (this.BLITZ_SCORING_MODE === 'fixed') {
+              delta = rr.lastAnswerCorrect ? this.BLITZ_FIXED_CORRECT : Math.round(this.BLITZ_FIXED_CORRECT * (this.BLITZ_WRONG_FACTOR));
+            } else {
+              // by value factors
+              delta = rr.lastAnswerCorrect
+                ? Math.round(base * this.BLITZ_CORRECT_FACTOR)
+                : Math.round(base * this.BLITZ_WRONG_FACTOR);
+            }
+          } else if (rr.lastAnswerCorrect) {
             delta = val;
           } else {
             delta = rr.isSuperQuestion ? -Math.round(val / 2) : -val;
@@ -324,7 +403,11 @@ export class BotEngineService {
       ? { ...rr.question, ...(Array.isArray(rr.questionOptions) ? { options: rr.questionOptions } : {}) }
       : undefined;
     const scores = rr?.scores ? { ...rr.scores } : undefined;
-    this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId, question, scores } as any);
+    const mode = rr?.blitzActive ? 'blitz' : 'normal';
+    const blitz = rr?.blitzActive
+      ? { index: (rr.blitzIndex ?? 0) + 1, total: rr.blitzTotal ?? 0, ownerPlayerId: rr.blitzOwnerId ?? 0, timerMs: this.BLITZ_TIMER_MS }
+      : undefined;
+    this.server?.to(roomId).emit('game:phase', { roomId, phase, until, activePlayerId, question, scores, mode, blitz } as any);
   }
 
   private emitBotStatus(roomId: string, playerId: number, status: 'idle' | 'thinking' | 'buzzed' | 'answering' | 'passed' | 'wrong' | 'correct') {
@@ -333,7 +416,12 @@ export class BotEngineService {
 
   private emitBoardState(roomId: string) {
     const rr = this.rooms.get(roomId);
-    const categories = rr?.board ?? [];
+    const round = rr?.round ?? 1;
+    const blitzSet = rr?.blitzCells?.get(round) ?? new Set<string>();
+    const categories = (rr?.board ?? []).map((c) => {
+      const blitzValues = c.values.filter((v) => blitzSet.has(`${c.title}:${v}`));
+      return blitzValues.length ? { ...c, blitzValues } : { ...c };
+    });
     this.server?.to(roomId).emit('board:state', { roomId, categories } as any);
   }
 
@@ -366,10 +454,15 @@ export class BotEngineService {
     const isHuman = typeof activeId === 'number' ? activeId >= 0 : false;
     if (!isHuman) return; // Only reveal mask to humans
     try {
-      const cat = rr.question?.category;
-      const val = rr.question?.value;
-      if (!cat || typeof val !== 'number') return;
-      const answer = await this.loadAnswer(cat, val);
+      let answer = '';
+      if (rr.questionId) {
+        answer = await this.loadAnswerById(rr.questionId);
+      } else {
+        const cat = rr.question?.category;
+        const val = rr.question?.value;
+        if (!cat || typeof val !== 'number') return;
+        answer = await this.loadAnswer(cat, val);
+      }
       if (!answer) return;
       const payload = this.buildMaskPayload(answer);
       this.server?.to(roomId).emit('word:mask', payload as any);
@@ -442,6 +535,10 @@ export class BotEngineService {
     }));
     // Ensure Super assignments for this round exist in DB and sync into runtime
     await this.ensureSuperAssignmentsForRound(roomId);
+    // Blitz cells for this round
+    await this.ensureBlitzAssignmentsForRound(roomId);
+    // Pre-assign base question for each board cell (avoid Blitz collisions)
+    await this.ensureCellAssignmentsForRound(roomId);
   }
 
   private async loadQuestion(categoryTitle: string, value: number) {
@@ -517,6 +614,12 @@ export class BotEngineService {
     this.emitBoardState(roomId);
     // Load question prompt
     rr.question = await this.loadQuestion(categoryTitle, value);
+    rr.questionId = this.getAssignedQuestionId(roomId, categoryTitle, value) ?? undefined;
+    // Blitz takes precedence
+    if (this.shouldTriggerBlitz(rr, categoryTitle, value)) {
+      await this.startBlitz(roomId, pickerId ?? this.getCurrentPickerId(roomId) ?? 0, categoryTitle, value);
+      return;
+    }
     // Super-game decision and options
     rr.isSuperQuestion = this.shouldTriggerSuper(rr, categoryTitle, value);
     if (rr.isSuperQuestion) {
@@ -795,6 +898,25 @@ export class BotEngineService {
     });
   }
 
+  private async loadAnswerById(questionId: string) {
+    try {
+      const q = await this.prisma.question.findUnique({
+        where: { id: questionId },
+        select: { canonicalAnswer: true, rawAnswer: true, answersAccept: true },
+      });
+      if (!q) return '';
+      const ca: any = (q as any).canonicalAnswer;
+      const ra: any = (q as any).rawAnswer;
+      const acc: any = (q as any).answersAccept;
+      if (typeof ca === 'string' && ca.trim()) return ca.trim();
+      if (typeof ra === 'string' && ra.trim()) return ra.trim();
+      if (Array.isArray(acc) && acc.length && typeof acc[0] === 'string') return acc[0];
+      return '';
+    } catch {
+      return '';
+    }
+  }
+
   private shouldTriggerSuper(rr: RoomRuntime, categoryTitle: string, value: number) {
     const round = rr.round ?? 1;
     const key = `${categoryTitle}:${value}`;
@@ -913,6 +1035,176 @@ export class BotEngineService {
     }
 
     rr.superCells.set(round, picks);
+  }
+
+  // Blitz: seed which cells in the current round are Blitz
+  private async ensureBlitzAssignmentsForRound(roomId: string) {
+    if (!this.BLITZ_ENABLED) return;
+    const rr = this.rooms.get(roomId);
+    if (!rr?.board) return;
+    const round = rr.round ?? 1;
+    // Only seed on configured rounds
+    if (!this.BLITZ_ROUNDS.includes(round)) return;
+    rr.blitzCells = rr.blitzCells ?? new Map();
+    if (rr.blitzCells.has(round)) return;
+    const allCells: string[] = [];
+    for (const c of rr.board) for (const v of c.values) allCells.push(`${c.title}:${v}`);
+    const picks = new Set<string>();
+    const n = Math.max(0, this.BLITZ_CELLS_PER_ROUND);
+    const pool = allCells.slice();
+    for (let i = 0; i < n && pool.length > 0; i++) {
+      const idx = Math.floor(this.rand() * pool.length);
+      const [key] = pool.splice(idx, 1);
+      picks.add(String(key));
+    }
+    rr.blitzCells.set(round, picks);
+  }
+
+  // Pre-assign a base question record id for each board cell (category:value)
+  private async ensureCellAssignmentsForRound(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr?.board) return;
+    const round = rr.round ?? 1;
+    rr.cellAssignments = rr.cellAssignments ?? new Map();
+    if (!rr.cellAssignments.has(round)) rr.cellAssignments.set(round, new Map());
+    const map = rr.cellAssignments.get(round)!;
+    for (const c of rr.board) {
+      const cat = await this.prisma.category.findUnique({ where: { title: c.title } });
+      if (!cat) continue;
+      for (const v of c.values) {
+        const key = `${c.title}:${v}`;
+        if (map.has(key)) continue;
+        const base = await this.prisma.question.findFirst({
+          where: { categoryId: cat.id, value: v },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        });
+        if (base?.id) map.set(key, base.id);
+      }
+    }
+  }
+
+  private getAssignedQuestionId(roomId: string, categoryTitle: string, value: number) {
+    const rr = this.rooms.get(roomId);
+    const round = rr?.round ?? 1;
+    const map = rr?.cellAssignments?.get(round);
+    const key = `${categoryTitle}:${value}`;
+    return map?.get(key);
+  }
+
+  private shouldTriggerBlitz(rr: RoomRuntime, categoryTitle: string, value: number) {
+    if (!this.BLITZ_ENABLED) return false;
+    const round = rr.round ?? 1;
+    if (!this.BLITZ_ROUNDS.includes(round)) return false;
+    const set = rr.blitzCells?.get(round);
+    if (!set) return false;
+    return set.has(`${categoryTitle}:${value}`);
+  }
+
+  private async startBlitz(roomId: string, ownerId: number, categoryTitle: string, maxValue: number) {
+    const rr = this.rooms.get(roomId);
+    if (!rr) return;
+    rr.blitzActive = true;
+    rr.blitzOwnerId = ownerId;
+    rr.blitzIndex = 0;
+    rr.blitzTotal = this.BLITZ_COUNT;
+    rr.blitzBaseValue = maxValue;
+    rr.blitzCategory = categoryTitle;
+    rr.isSuperQuestion = false;
+    rr.questionOptions = undefined;
+    rr.activePlayerId = ownerId;
+    // Build blitz questions list
+    rr.blitzQuestions = await this.buildBlitzQuestions(roomId, categoryTitle, maxValue, this.BLITZ_COUNT);
+    // Kick off first question
+    await this.startBlitzQuestion(roomId);
+  }
+
+  private async buildBlitzQuestions(roomId: string, categoryTitle: string, maxValue: number, count: number) {
+    const rr = this.rooms.get(roomId);
+    const res: { id: string; value: number; prompt: string }[] = [];
+    const assignedIds = new Set<string>();
+    const round = rr?.round ?? 1;
+    const map = rr?.cellAssignments?.get(round) ?? new Map<string, string>();
+    // Collect assigned questionIds for this category and allowed values to exclude
+    for (const [key, qid] of map.entries()) {
+      const [cat, valStr] = key.split(':');
+      const val = Number(valStr);
+      if (cat === categoryTitle && Number.isFinite(val) && val <= maxValue && qid) assignedIds.add(qid);
+    }
+    const catRec = await this.prisma.category.findUnique({ where: { title: categoryTitle } });
+    if (!catRec) return res;
+    const pool = await this.prisma.question.findMany({
+      where: { categoryId: catRec.id, value: { lte: maxValue } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, value: true, prompt: true },
+      take: 100,
+    });
+    const candidates = pool.filter((q) => !assignedIds.has(q.id));
+    const bag = candidates.slice();
+    while (res.length < count && bag.length > 0) {
+      const idx = Math.floor(this.rand() * bag.length);
+      const [pick] = bag.splice(idx, 1);
+      res.push({ id: pick.id, value: pick.value as number, prompt: pick.prompt as any });
+    }
+    return res;
+  }
+
+  private async startBlitzQuestion(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr || !rr.blitzActive) return;
+    const i = rr.blitzIndex ?? 0;
+    const item = rr.blitzQuestions?.[i];
+    if (!item) {
+      await this.endBlitz(roomId);
+      return;
+    }
+    rr.question = { category: rr.blitzCategory || '', value: item.value, prompt: item.prompt };
+    rr.questionId = item.id;
+    rr.activePlayerId = rr.blitzOwnerId ?? null;
+    // Emit phase with Blitz mode
+    this.goto(roomId, 'answer_wait', Date.now() + this.BLITZ_TIMER_MS);
+    void this.onEnterAnswerWait(roomId);
+    // Timeout handler
+    this.timers.set(roomId, 'phase_answer_wait', this.BLITZ_TIMER_MS, () => {
+      const rrx = this.rooms.get(roomId);
+      if (!rrx || !rrx.blitzActive) return;
+      if (rrx.activePlayerId !== (rrx.blitzOwnerId ?? null)) return;
+      rrx.lastAnswerCorrect = false;
+      this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
+      this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterBlitzScore(roomId));
+    });
+  }
+
+  private async endBlitz(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr) return;
+    rr.blitzActive = false;
+    rr.blitzOwnerId = undefined;
+    rr.blitzIndex = undefined;
+    rr.blitzTotal = undefined;
+    rr.blitzBaseValue = undefined;
+    rr.blitzCategory = undefined;
+    rr.blitzQuestions = undefined;
+    rr.questionId = undefined;
+    rr.question = undefined;
+    rr.questionOptions = undefined;
+    rr.isSuperQuestion = undefined;
+    rr.activePlayerId = null;
+    // After Blitz, the same picker remains
+    void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
+    void this.schedulePrepare(roomId);
+  }
+
+  private advanceAfterBlitzScore(roomId: string) {
+    const rr = this.rooms.get(roomId);
+    if (!rr?.blitzActive) return;
+    const next = (rr.blitzIndex ?? 0) + 1;
+    if (next < (rr.blitzTotal ?? 0)) {
+      rr.blitzIndex = next;
+      void this.startBlitzQuestion(roomId);
+    } else {
+      void this.endBlitz(roomId);
+    }
   }
 
   private async ensureSession(roomId: string) {

@@ -109,6 +109,17 @@ export const ZGamePhaseEvent = z.object({
     .optional(),
   // Optional: current scores by playerId
   scores: z.record(z.string(), z.number().int()).optional(),
+  // Optional: mode for special flows like Blitz
+  mode: z.enum(['normal', 'blitz']).optional(),
+  // Optional: blitz progress details
+  blitz: z
+    .object({
+      index: z.number().int(), // 1-based index of current question within blitz
+      total: z.number().int(),
+      ownerPlayerId: z.number().int(),
+      timerMs: z.number().int().optional(),
+    })
+    .optional(),
 });
 export const ZBotStatus = z.object({
   roomId: z.string().uuid(),
@@ -122,7 +133,12 @@ export type TGamePhaseEvent = z.infer<typeof ZGamePhaseEvent>;
 export type TBotStatus = z.infer<typeof ZBotStatus>;
 
 // Board state (lightweight for client rendering)
-export const ZBoardCategory = z.object({ title: z.string(), values: z.array(z.number().int()) });
+export const ZBoardCategory = z.object({
+  title: z.string(),
+  values: z.array(z.number().int()),
+  // Optional: which values in this category are Blitz cells for this round
+  blitzValues: z.array(z.number().int()).optional(),
+});
 export const ZBoardState = z.object({ roomId: z.string().uuid(), categories: z.array(ZBoardCategory) });
 export type TBoardCategory = z.infer<typeof ZBoardCategory>;
 export type TBoardState = z.infer<typeof ZBoardState>;

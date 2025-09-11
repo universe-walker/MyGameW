@@ -1,3 +1,5 @@
+import { getInitDataRaw } from './telegram';
+
 const base =
   import.meta.env.VITE_API_BASE_URL ||
   (window as any).API_BASE_URL ||
@@ -7,5 +9,8 @@ const prefix = ((import.meta as any).env?.VITE_API_PATH_PREFIX || (window as any
 export const apiBase = `${base}${prefix}`;
 
 export async function fetchApi(path: string, init?: RequestInit) {
-  return fetch(`${apiBase}${path}`, init);
+  const headers = new Headers(init?.headers || {});
+  const initData = getInitDataRaw();
+  if (initData) headers.set('X-Telegram-Init-Data', initData);
+  return fetch(`${apiBase}${path}`, { ...init, headers });
 }

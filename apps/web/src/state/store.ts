@@ -9,7 +9,7 @@ export type Phase =
   | 'score_apply'
   | 'round_end'
   | 'final';
-export type BoardCategory = { title: string; values: number[] };
+export type BoardCategory = { title: string; values: number[]; blitzValues?: number[] };
 export type CurrentQuestion = { category: string; value: number; prompt: string; options?: string[] };
 
 type State = {
@@ -17,12 +17,15 @@ type State = {
   solo: boolean;
   players: Player[];
   phase: Phase;
+  mode?: 'normal' | 'blitz';
+  blitzIndex?: number; // 1-based
+  blitzTotal?: number;
   until?: number;
   activePlayerId?: number | null;
   botStatuses: Record<number, string>;
   boardCategories: BoardCategory[];
   question?: CurrentQuestion;
-  scores: Record<number, number>;
+  scores: Record<string, number>;
   revealAnswer: string | null;
   // current word mask for placeholders
   answerMask: string | null;
@@ -38,7 +41,8 @@ type State = {
     until?: number,
     activePlayerId?: number | null,
     question?: CurrentQuestion,
-    scores?: Record<number, number>,
+    scores?: Record<string, number>,
+    extras?: { mode?: 'normal' | 'blitz'; blitz?: { index: number; total: number } },
   ) => void;
   setBoard: (categories: BoardCategory[]) => void;
   setBotStatus: (playerId: number, status: string) => void;
@@ -68,13 +72,16 @@ export const useGameStore = create<State>((set) => ({
   pauseOffsetMs: 0,
   pauseStartedAt: null,
   setRoom: (id, players, solo = false) => set({ roomId: id, players, solo }),
-  setPhase: (phase, until, activePlayerId, question, scores) =>
+  setPhase: (phase, until, activePlayerId, question, scores, extras) =>
     set((s) => ({
       phase,
       until,
       activePlayerId,
       question,
       scores: scores ?? s.scores,
+      mode: extras?.mode,
+      blitzIndex: extras?.blitz?.index,
+      blitzTotal: extras?.blitz?.total,
       // Reset pause bookkeeping on every new phase payload
       paused: false,
       pauseOffsetMs: 0,

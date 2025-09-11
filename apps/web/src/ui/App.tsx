@@ -70,7 +70,7 @@ export function App() {
     }
     // Try loading profile score when possible
     if (user) {
-      fetchApi(`/profile?userId=${user.id}`).then(async (r) => {
+      fetchApi(`/profile`).then(async (r) => {
         if (r.ok) {
           const j = (await r.json()) as { profileScore: number };
           if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
