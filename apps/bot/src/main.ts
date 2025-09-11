@@ -9,12 +9,14 @@ if (!botToken) {
 
 const WEBAPP_BASE_URL = process.env.BOT_WEBAPP_BASE_URL || process.env.WEBAPP_BASE_URL || '';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:4000';
+const BILLING_BOT_SECRET = process.env.BILLING_BOT_SECRET || '';
 
 console.log('🚀 Starting bot...');
 console.log('Environment variables:');
 console.log(`- BOT_TELEGRAM_BOT_TOKEN: ${botToken}`);
 console.log(`- WEBAPP_BASE_URL: ${WEBAPP_BASE_URL || '❌ Missing'}`);
 console.log(`- API_BASE_URL: ${API_BASE_URL}`);
+console.log(`- BILLING_BOT_SECRET: ${BILLING_BOT_SECRET ? 'set' : 'missing'}`);
 
 const bot = new Bot(botToken);
 
@@ -67,6 +69,32 @@ bot.command('start', async (ctx) => {
 });
 
 console.log('🔄 Attempting to start bot...');
+
+// Handle successful payment (Stars). Confirm on API to credit the user.
+bot.on('message:successful_payment', async (ctx) => {
+  try {
+    const sp = (ctx.message as any)?.successful_payment as any;
+    if (!sp) return;
+    const invoice_payload = sp.invoice_payload as string;
+    const telegram_payment_charge_id = (sp.telegram_payment_charge_id || sp.provider_payment_charge_id) as string | undefined;
+    const currency = sp.currency as string;
+    const total_amount = sp.total_amount as number;
+    if (!telegram_payment_charge_id) {
+      console.error('[bot] missing payment charge id');
+      return;
+    }
+    const res = await fetch(`${API_BASE_URL}/billing/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Bot-Secret': BILLING_BOT_SECRET },
+      body: JSON.stringify({ telegram_payment_charge_id, currency, total_amount, invoice_payload }),
+    });
+    const txt = await res.text().catch(() => '');
+    if (!res.ok) console.error('[bot] /billing/confirm failed', res.status, txt);
+    else console.log('[bot] /billing/confirm ok', txt);
+  } catch (e) {
+    console.error('[bot] payment confirm handler error', e);
+  }
+});
 
 // In grammY, bot.start() begins long polling and does not resolve until stopped.
 // Validate the token first, then start polling without awaiting the promise.

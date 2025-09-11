@@ -18,6 +18,7 @@ export function App() {
   const setPaused = useGameStore((s) => s.setPaused);
   const { shopOpen, achievementsOpen, openShop, closeShop, openAchievements, closeAchievements } = useUiHome();
   const [profileScore, setProfileScore] = useState<number>(0);
+  const [hintAllowance, setHintAllowance] = useState<number>(0);
   const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
   const [, setGameStarted] = useState(false);
 
@@ -68,12 +69,13 @@ export function App() {
       // Do not auto-join: store pending id and let user decide
       setPendingRoomId(id);
     }
-    // Try loading profile score when possible
+    // Load profile (score and hint balance)
     if (user) {
       fetchApi(`/profile`).then(async (r) => {
         if (r.ok) {
-          const j = (await r.json()) as { profileScore: number };
+          const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
           if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
+          if (typeof j.hintAllowance === 'number') setHintAllowance(j.hintAllowance);
         }
       });
     }
@@ -172,13 +174,12 @@ export function App() {
           <div className="text-xl font-bold">MyGame</div>
           <div className="flex items-center gap-3">
             <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>
-              🏆 Достижения
+              Достижения
             </button>
-            <div className="text-sm px-2 py-1 rounded bg-yellow-100">
-              ⭐ Счёт: {profileScore}
-            </div>
+            <div className="text-sm px-2 py-1 rounded bg-yellow-100">Проф. очки: {profileScore}</div>
+            <div className="text-sm px-2 py-1 rounded bg-yellow-50">⭐ Подсказки: {hintAllowance}</div>
             <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>
-              🛒 Магазин
+              Магазин
             </button>
           </div>
         </div>
@@ -192,10 +193,10 @@ export function App() {
         <div className="grow flex flex-col items-center justify-center gap-4">
           {pendingRoomId && (
             <div className="w-full max-w-md p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
-              Найдена приглашение в комнату: <span className="font-mono">{pendingRoomId}</span>
+              Приглашение в игру с ID: <span className="font-mono">{pendingRoomId}</span>
               <div className="mt-2 flex gap-2">
                 <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={onJoinPendingRoom}>Присоединиться</button>
-                <button className="px-3 py-2 rounded bg-gray-200" onClick={() => setPendingRoomId(null)}>Игнорировать</button>
+                <button className="px-3 py-2 rounded bg-gray-200" onClick={() => setPendingRoomId(null)}>Скрыть</button>
               </div>
             </div>
           )}
@@ -203,14 +204,25 @@ export function App() {
             Найти игру
           </button>
           <button className="w-full max-w-md py-4 text-lg rounded bg-indigo-600 text-white" onClick={onSoloGame}>
-            Одиночная игра
+            Соло режим
           </button>
-          {!verified && <div className="text-sm text-gray-500">Верификация...</div>}
+          {!verified && <div className="text-sm text-gray-500">Инициализация...</div>}
         </div>
       )}
 
       {/* Modals */}
-      <ShopModal open={shopOpen} onClose={closeShop} />
+      <ShopModal
+        open={shopOpen}
+        onClose={closeShop}
+        onPurchaseCompleted={async () => {
+          const r = await fetchApi(`/profile`);
+          if (r.ok) {
+            const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
+            if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
+            if (typeof j.hintAllowance === 'number') setHintAllowance(j.hintAllowance);
+          }
+        }}
+      />
       <AchievementsModal open={achievementsOpen} onClose={closeAchievements} />
       {showDebugConsole && <DebugConsole />}
     </div>
