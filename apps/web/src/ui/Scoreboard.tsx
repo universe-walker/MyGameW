@@ -29,7 +29,7 @@ export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: S
           // Cleanup after animation ends
           setTimeout(() => {
             setBursts((arr) => arr.filter((b) => b.id !== id));
-          }, 1200);
+          }, 1700);
         }
       }
       nextPrev[k] = cur;
@@ -49,7 +49,7 @@ export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: S
               {myBursts.map((b) => (
                 <span
                   key={b.id}
-                  className={`score-burst text-sm font-bold ${b.delta > 0 ? 'text-green-400' : 'text-red-400'}`}
+                  className={`score-burst text-lg font-extrabold ${b.delta > 0 ? 'text-green-400' : 'text-red-400'}`}
                 >
                   {b.delta > 0 ? `+${b.delta}` : `${b.delta}`}
                 </span>
@@ -60,10 +60,10 @@ export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: S
             <div className="text-lg font-semibold">{p.name}</div>
             <div className="mt-2 text-2xl">{score}</div>
             {p.bot ? (
-              <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? '...'}</div>
+              <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? ''}</div>
             ) : (
               <div className={`mt-1 text-xs ${isMyTurnToAnswer ? 'text-green-300' : 'text-gray-400'}`}>
-                {isMyTurnToAnswer ? 'Ваш ход' : 'Ожидание'}
+                {isMyTurnToAnswer ? 'Ваш ход' : ''}
               </div>
             )}
           </div>

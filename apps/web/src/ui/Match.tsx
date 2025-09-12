@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useGameStore } from '../state/store';
 import { Board } from './Board';
 import { QuestionPrompt } from './QuestionPrompt';
@@ -35,8 +35,34 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     return () => clearInterval(id);
   }, [until]);
 
-  const dynamicOffset = pauseStartedAt && paused ? pauseOffsetMs + (now - pauseStartedAt) : pauseOffsetMs;
+  // Local overlay pause bookkeeping (used when we cannot truly pause the server, e.g. multiplayer)
+  const [overlayActive, setOverlayActive] = useState(false);
+  const [overlayStage, setOverlayStage] = useState<'in' | 'out'>('in');
+  const overlayStartedAtRef = useRef<number | null>(null);
+  const overlayAccMsRef = useRef(0);
+  const soloPausedByOverlayRef = useRef(false);
+
+  // Effective dynamic offset: includes store pause and local overlay pause (for non-solo)
+  const baseOffset = pauseStartedAt && paused ? pauseOffsetMs + (now - pauseStartedAt) : pauseOffsetMs;
+  const overlayExtraOffset = solo && soloPausedByOverlayRef.current
+    ? 0 // in solo, real pause already reflected by store pause bookkeeping
+    : overlayAccMsRef.current + (overlayActive && overlayStartedAtRef.current ? now - overlayStartedAtRef.current : 0);
+  const dynamicOffset = baseOffset + overlayExtraOffset;
   const remainingMs = until ? Math.max(0, until + dynamicOffset - now) : undefined;
+
+  // Reset local overlay offsets only when a fresh phase/until arrives and overlay is NOT showing
+  const lastPhaseRef = useRef<string | null>(null);
+  const lastUntilRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const phaseChanged = lastPhaseRef.current !== phase;
+    const untilChanged = lastUntilRef.current !== until;
+    if (!overlayActive && (phaseChanged || untilChanged)) {
+      overlayAccMsRef.current = 0;
+      overlayStartedAtRef.current = null;
+    }
+    lastPhaseRef.current = phase;
+    lastUntilRef.current = until;
+  }, [phase, until, overlayActive]);
 
   // My player id: use Telegram user id if available, fallback to first non-bot
   const myId = useMemo(() => {
@@ -104,6 +130,88 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     return '';
   }, [phase, activePlayerName]);
 
+  // Round overlay detection: show on first prepare and when the board resets (available cell count grows)
+  const [roundNumber, setRoundNumber] = useState<number>(0);
+  const lastBoardSigRef = useRef<string | null>(null);
+  const lastCellCountRef = useRef<number>(0);
+  const currentBoardSig = useMemo(() => {
+    const parts: string[] = [];
+    (board || [])
+      .slice()
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .forEach((c) => {
+        const vs = [...(c.values || [])].sort((a, b) => a - b).join(',');
+        parts.push(`${c.title}:${vs}`);
+      });
+    return parts.join('|');
+  }, [board]);
+  const currentCellCount = useMemo(() => {
+    return (board || []).reduce((acc, c) => acc + (c.values?.length || 0), 0);
+  }, [board]);
+
+  const startOverlay = useCallback((num: number) => {
+    // Prevent re-entry
+    if (overlayActive) return;
+    setRoundNumber(num);
+    setOverlayStage('in');
+    setOverlayActive(true);
+    overlayStartedAtRef.current = Date.now();
+    // Pause the world: in solo ask the server to pause too
+    if (solo && onPause && !paused) {
+      try {
+        onPause();
+        soloPausedByOverlayRef.current = true;
+      } catch {}
+    }
+    // Animate in -> hold -> out -> done
+    const holdMs = 1200;
+    const fadeOutMs = 300;
+    setTimeout(() => {
+      setOverlayStage('out');
+      setTimeout(() => {
+        // First, finalize extra offset so that when we show timer again it's already adjusted
+        const startedAt = overlayStartedAtRef.current ?? Date.now();
+        overlayAccMsRef.current += Math.max(0, Date.now() - startedAt);
+        overlayStartedAtRef.current = null;
+        // Now hide overlay
+        setOverlayActive(false);
+        // Resume solo if we paused it
+        if (solo && soloPausedByOverlayRef.current && onResume) {
+          try {
+            onResume();
+          } catch {}
+        }
+        soloPausedByOverlayRef.current = false;
+      }, fadeOutMs);
+    }, holdMs);
+  }, [overlayActive, solo, onPause, onResume, paused]);
+
+  // Trigger overlay when entering prepare for the first time, or when board cell count increases (new round)
+  useEffect(() => {
+    if (phase !== 'prepare') return;
+    // First prepare ever
+    if (!lastBoardSigRef.current) {
+      lastBoardSigRef.current = currentBoardSig;
+      lastCellCountRef.current = currentCellCount;
+      const next = 1;
+      setRoundNumber(next);
+      startOverlay(next);
+      return;
+    }
+    // New round if cell count grew compared to previous snapshot
+    if (currentCellCount > lastCellCountRef.current) {
+      lastBoardSigRef.current = currentBoardSig;
+      lastCellCountRef.current = currentCellCount;
+      const next = (roundNumber || 1) + 1;
+      setRoundNumber(next);
+      startOverlay(next);
+      return;
+    }
+    // Same or reduced cells: just update snapshot
+    lastBoardSigRef.current = currentBoardSig;
+    lastCellCountRef.current = currentCellCount;
+  }, [phase, currentBoardSig, currentCellCount, startOverlay, roundNumber]);
+
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
       {/* Header: active players + timer */}
@@ -114,7 +222,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
             <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-1">⏸ Пауза</span>
           )}
         </div>
-        {remainingMs !== undefined && (
+        {!overlayActive && remainingMs !== undefined && (
           <div className="font-mono">{Math.ceil(remainingMs / 1000)}с</div>
         )}
       </div>
@@ -181,6 +289,25 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         isMyTurnToAnswer={isMyTurnToAnswer}
         scores={scores}
       />
+
+      {/* Round overlay */}
+      {overlayActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-auto">
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative px-6 py-4 rounded-lg bg-indigo-700/90 text-white shadow-2xl border border-white/20"
+            style={{
+              opacity: overlayStage === 'in' ? 1 : 0,
+              transform: overlayStage === 'in' ? 'scale(1)' : 'scale(0.98)',
+              transition: 'opacity 300ms ease, transform 300ms ease',
+            }}
+          >
+            <div className="text-3xl sm:text-5xl font-extrabold tracking-wide text-center select-none">
+              Раунд {Math.max(1, roundNumber || 1)}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
