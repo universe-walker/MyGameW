@@ -7,12 +7,13 @@ export type BoardProps = {
   roomId: string | null;
   board: BoardCategory[];
   canPick: boolean;
+  round?: number;
 };
 
 // Snapshot of board layout by roomId to persist across unmounts during a round
 const boardSnapshotByRoom: Map<string, { cats: string[]; costs: number[] }> = new Map();
 
-export function Board({ roomId, board, canPick }: BoardProps) {
+export function Board({ roomId, board, canPick, round = 1 }: BoardProps) {
   const roomKey = roomId || '__global__';
   const grid = useMemo(() => {
     const currentCats = board.map((c) => c.title);
@@ -140,6 +141,7 @@ export function Board({ roomId, board, canPick }: BoardProps) {
               : canPick
               ? 'bg-indigo-600 text-white hover:bg-indigo-700'
               : 'bg-gray-300 text-gray-600 cursor-not-allowed';
+            const displayValue = (round >= 2 ? cost * 2 : cost);
             return (
               <button
                 key={`${c}-${cost}`}
@@ -148,7 +150,7 @@ export function Board({ roomId, board, canPick }: BoardProps) {
                 onClick={() => onPickCell(c, cost)}
                 title={canPick ? 'Выбрать вопрос' : 'Сейчас выбор недоступен'}
               >
-                {cost}
+                {displayValue}
               </button>
             );
           })}

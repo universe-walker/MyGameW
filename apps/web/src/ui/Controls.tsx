@@ -163,7 +163,6 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           >
             Ответить
           </button>
-          <div className="text-xs text-green-700 whitespace-nowrap">Печать с клавиатуры</div>
         </div>
       )}
       {showMeta && solo && !paused && (

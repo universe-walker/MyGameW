@@ -383,10 +383,14 @@ export class BotEngineService {
                 ? Math.round(base * this.BLITZ_CORRECT_FACTOR)
                 : Math.round(base * this.BLITZ_WRONG_FACTOR);
             }
-          } else if (rr.lastAnswerCorrect) {
-            delta = val;
           } else {
-            delta = rr.isSuperQuestion ? -Math.round(val / 2) : -val;
+            // Double points starting from round 2
+            const factor = (rr.round ?? 1) >= 2 ? 2 : 1;
+            if (rr.lastAnswerCorrect) {
+              delta = val * factor;
+            } else {
+              delta = rr.isSuperQuestion ? -Math.round((val * factor) / 2) : -(val * factor);
+            }
           }
           rr.scores[pid] = (rr.scores[pid] ?? 0) + delta;
         }
@@ -422,7 +426,7 @@ export class BotEngineService {
       const blitzValues = c.values.filter((v) => blitzSet.has(`${c.title}:${v}`));
       return blitzValues.length ? { ...c, blitzValues } : { ...c };
     });
-    this.server?.to(roomId).emit('board:state', { roomId, categories } as any);
+    this.server?.to(roomId).emit('board:state', { roomId, round, categories } as any);
   }
 
   private buildMaskPayload(answer: string) {

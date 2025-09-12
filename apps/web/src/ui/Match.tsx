@@ -230,7 +230,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
       {/* Board */}
       {showBoard && (
         <div ref={boardWrapRef} className="w-full overflow-x-auto">
-          <Board roomId={roomId} board={board} canPick={canPick} />
+          <Board roomId={roomId} board={board} canPick={canPick} round={Math.max(1, roundNumber || 1)} />
         </div>
       )}
 
