@@ -64,7 +64,12 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         )}
       </div>
 
-      {showBoard && <Board roomId={roomId} board={board} canPick={canPick} />}
+      {/* Board: горизонтальный скролл при узких экранах, без растягивания по высоте */}
+      {showBoard && (
+        <div className="w-full overflow-x-auto">
+          <Board roomId={roomId} board={board} canPick={canPick} />
+        </div>
+      )}
 
       <QuestionPrompt question={question} />
 

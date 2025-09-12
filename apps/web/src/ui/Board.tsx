@@ -87,11 +87,11 @@ export function Board({ roomId, board, canPick }: BoardProps) {
 
   return (
     <div
-      className="grid gap-3"
+      className="grid gap-2 sm:gap-3"
       style={{ gridTemplateColumns: `repeat(${grid.cats.length}, minmax(0, 1fr))` }}
     >
       {grid.cats.map((c, i) => (
-        <div key={c} className="flex flex-col gap-3">
+        <div key={c} className="flex flex-col gap-2 sm:gap-3">
           <div
             ref={(el) => (headerRefs.current[i] = el)}
             className="rounded bg-indigo-900 text-white text-center font-semibold flex items-center justify-center px-2 py-2 overflow-hidden whitespace-normal break-normal leading-tight"
@@ -115,7 +115,7 @@ export function Board({ roomId, board, canPick }: BoardProps) {
             return (
               <button
                 key={`${c}-${cost}`}
-                className={`rounded py-4 text-lg disabled:opacity-60 ${cls}`}
+                className={`rounded py-3 sm:py-4 text-base sm:text-lg disabled:opacity-60 ${cls}`}
                 disabled={disabled}
                 onClick={() => onPickCell(c, cost)}
                 title={canPick ? 'Выбрать вопрос' : 'Сейчас выбор недоступен'}
@@ -129,5 +129,4 @@ export function Board({ roomId, board, canPick }: BoardProps) {
     </div>
   );
 }
-
 

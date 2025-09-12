@@ -9,7 +9,7 @@ export type ScoreboardProps = {
 
 export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: ScoreboardProps) {
   return (
-    <div className="grid grid-cols-3 gap-3 mt-auto">
+    <div className="grid grid-cols-3 gap-3">
       {players.map((p, i) => (
         <div key={p.id} className="rounded bg-slate-800 text-white p-3 flex flex-col items-center">
           <div className="text-sm opacity-80">{p.bot ? `Бот ${i + 1}` : 'Вы'}</div>
