@@ -93,22 +93,33 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     }
   }, [isMyTurnToAnswer]);
 
+  // Names for header
+  const activePlayerName = useMemo(
+    () => players.find((p) => p.id === activePlayerId)?.name ?? '',
+    [players, activePlayerId],
+  );
+  const statusText = useMemo(() => {
+    if (phase === 'prepare') return activePlayerName ? `Выбирает игрок ${activePlayerName}` : '';
+    if (phase === 'answer_wait') return activePlayerName ? `Отвечает игрок ${activePlayerName}` : '';
+    return '';
+  }, [phase, activePlayerName]);
+
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
-      {/* Phase + timer */}
+      {/* Header: active players + timer */}
       <div className="flex items-center justify-between p-2 rounded bg-slate-100">
         <div className="flex items-center gap-2">
-          <div className="text-sm">Фаза: {phase}</div>
+          {statusText && <div className="text-sm">{statusText}</div>}
           {paused && (
             <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-1">⏸ Пауза</span>
           )}
         </div>
         {remainingMs !== undefined && (
-          <div className="font-mono">{Math.ceil(remainingMs / 100) / 10}s</div>
+          <div className="font-mono">{Math.ceil(remainingMs / 1000)}с</div>
         )}
       </div>
 
-      {/* Board: горизонтальный скролл на узких экранах */}
+      {/* Board */}
       {showBoard && (
         <div ref={boardWrapRef} className="w-full overflow-x-auto">
           <Board roomId={roomId} board={board} canPick={canPick} />
@@ -117,7 +128,10 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
       {/* Question area keeps at least the last measured board height
           to avoid vertical jumps when switching phases. */}
-      <div ref={questionAreaRef} style={{ minHeight: !showBoard ? (boardHeight || 300) : undefined, transition: 'min-height 150ms ease' }}>
+      <div
+        ref={questionAreaRef}
+        style={{ minHeight: !showBoard ? (boardHeight || 300) : undefined, transition: 'min-height 150ms ease' }}
+      >
         <QuestionPrompt question={question} />
 
         {/* Options under the question (not inside the yellow card) */}
@@ -170,4 +184,3 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     </div>
   );
 }
-
