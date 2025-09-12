@@ -522,6 +522,13 @@ export class BotEngineService {
     // If board existed but is now empty, advance round
     if (rr.board && rr.board.every((c) => c.values.length === 0)) {
       rr.round = (rr.round ?? 1) + 1;
+      // End game after finishing 2 rounds
+      if ((rr.round ?? 1) > 2) {
+        rr.activePlayerId = null;
+        this.timers.clearAll(roomId);
+        this.goto(roomId, 'final');
+        return;
+      }
     }
     // Load first 4 categories with up to 5 values each
     const cats = await this.prisma.category.findMany({
@@ -679,10 +686,13 @@ export class BotEngineService {
     await this.ensureOrder(roomId);
     const rr = this.rooms.get(roomId);
     if (!rr) return;
+    // Do not schedule if game is over
+    if (rr.phase === 'final') return;
     const pickerId = this.getCurrentPickerId(roomId);
     rr.activePlayerId = pickerId ?? null; // indicate who chooses
     const ms = await this.computePrepareMs(roomId);
     this.goto(roomId, 'prepare', Date.now() + ms);
+
     const isBot = typeof pickerId === 'number' ? pickerId < 0 : false;
     if (isBot) {
       // Bot will pick automatically after its window

@@ -5,6 +5,7 @@ import { QuestionPrompt } from './QuestionPrompt';
 import { Controls } from './Controls';
 import { Scoreboard } from './Scoreboard';
 import { getUser } from '../lib/telegram';
+import GameOverModal from './GameOverModal';
 
 type Props = {
   onAnswer: (text: string) => void;
@@ -41,6 +42,8 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const overlayStartedAtRef = useRef<number | null>(null);
   const overlayAccMsRef = useRef(0);
   const soloPausedByOverlayRef = useRef(false);
+  // Solo game over modal after 2 rounds
+  const [gameOverOpen, setGameOverOpen] = useState(false);
 
   // Effective dynamic offset: includes store pause and local overlay pause (for non-solo)
   const baseOffset = pauseStartedAt && paused ? pauseOffsetMs + (now - pauseStartedAt) : pauseOffsetMs;
@@ -203,14 +206,29 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
       lastBoardSigRef.current = currentBoardSig;
       lastCellCountRef.current = currentCellCount;
       const next = (roundNumber || 1) + 1;
-      setRoundNumber(next);
-      startOverlay(next);
+      // If solo and about to start round 3 -> show Game Over instead
+      if (solo && next >= 3) {
+        setGameOverOpen(true);
+        setOverlayActive(false);
+        setRoundNumber(2);
+      } else {
+        setRoundNumber(next);
+        startOverlay(next);
+      }
       return;
     }
     // Same or reduced cells: just update snapshot
     lastBoardSigRef.current = currentBoardSig;
     lastCellCountRef.current = currentCellCount;
   }, [phase, currentBoardSig, currentCellCount, startOverlay, roundNumber]);
+
+  // If server signals the end of the game (final), show Game Over (solo only)
+  useEffect(() => {
+    if (solo && phase === 'final') {
+      setOverlayActive(false);
+      setGameOverOpen(true);
+    }
+  }, [solo, phase]);
 
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
@@ -291,7 +309,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
       />
 
       {/* Round overlay */}
-      {overlayActive && (
+      {overlayActive && !gameOverOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-auto">
           <div className="absolute inset-0 bg-black/40" />
           <div
@@ -307,6 +325,19 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Game Over for Solo after Round 2 */}
+      {solo && gameOverOpen && (
+        <GameOverModal
+          open={true}
+          players={players}
+          scores={scores}
+          onOk={() => {
+            setGameOverOpen(false);
+            onLeave();
+          }}
+        />
       )}
     </div>
   );
