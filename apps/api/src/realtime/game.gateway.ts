@@ -19,6 +19,7 @@ import {
   ZSoloPauseReq,
   ZSoloResumeReq,
 } from '@mygame/shared';
+import { z } from 'zod';
 import crypto from 'crypto';
 import { BotEngineService } from '../services/bot-engine.service';
 import { parseInitData, verifyInitData } from '../services/telegram-auth.util';
@@ -206,6 +207,28 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const pickerId = user?.id ?? 0;
     const { roomId, category, value } = parsed.data;
     await this.engine.onBoardPick(roomId, category, value, pickerId);
+  }
+
+  @SubscribeMessage('hint:reveal_letter')
+  async onHintRevealLetter(@ConnectedSocket() client: Socket, @MessageBody() payload: unknown) {
+    const ZHintRevealReqLocal = z.object({ roomId: z.string().uuid(), position: z.number().int().min(0) });
+    const parsed = ZHintRevealReqLocal.safeParse(payload);
+    if (!parsed.success) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] invalid payload for hint:reveal_letter', payload);
+      return;
+    }
+    const { roomId, position } = parsed.data;
+    const user = (client as any).data?.user as { id: number } | undefined;
+    const playerId = user?.id ?? 0; // allow Anon in dev
+    const res = await this.engine.attemptRevealLetter(roomId, playerId, position);
+    if (res.ok) {
+      this.server?.to(roomId).emit('word:reveal', { position: res.position, char: res.char } as any);
+      // Also update the requester with latest mask and whether they can reveal again
+      client.emit('word:mask', { mask: res.newMask, len: res.newMask.length, canReveal: res.nextCanReveal } as any);
+    } else {
+      client.emit('hint:error', { message: res.error } as any);
+    }
   }
 
   @SubscribeMessage('ping')

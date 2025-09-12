@@ -12,6 +12,8 @@ function setupSocketListeners(
   setBoard: any,
   setReveal: (text: string | null) => void,
   setMask: (mask: string | null, len?: number) => void,
+  setCanRevealHint: (v: boolean) => void,
+  setHintError: (msg: string | null) => void,
   onNearMiss: () => void,
 ) {
   console.log('[socket] setupSocketListeners: attaching listeners');
@@ -25,10 +27,14 @@ function setupSocketListeners(
   });
   socket.on('game:phase', (p: TGamePhaseEvent) => {
     console.log('[socket] event game:phase', p);
-    const extras: any = { mode: p.mode, blitz: p.blitz ? { index: p.blitz.index, total: p.blitz.total } : undefined };
+    const anyp: any = p as any;
+    const extras: any = { mode: anyp.mode, blitz: anyp.blitz ? { index: anyp.blitz.index, total: anyp.blitz.total } : undefined };
     setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question, p.scores, extras);
     if (p.phase === 'prepare' || p.phase === 'answer_wait') setReveal(null);
-    if (p.phase !== 'answer_wait') setMask(null, 0);
+    if (p.phase !== 'answer_wait') {
+      setMask(null, 0);
+      setCanRevealHint(false);
+    }
   });
   socket.on('bot:status', (b: TBotStatus) => {
     console.log('[socket] event bot:status', b);
@@ -41,6 +47,28 @@ function setupSocketListeners(
   socket.on('word:mask', (payload: any) => {
     console.log('[socket] event word:mask', payload);
     if (payload && typeof payload.mask === 'string') setMask(payload.mask, Number(payload.len) || 0);
+    if (payload && typeof payload.canReveal === 'boolean') setCanRevealHint(Boolean(payload.canReveal));
+  });
+
+  socket.on('word:reveal', (payload: any) => {
+    console.log('[socket] event word:reveal', payload);
+    if (payload && typeof payload.position === 'number' && typeof payload.char === 'string') {
+      const s = useGameStore.getState();
+      const cur = s.answerMask ?? '';
+      if (cur) {
+        const arr = Array.from(cur);
+        if (payload.position >= 0 && payload.position < arr.length) {
+          arr[payload.position] = payload.char;
+          setMask(arr.join(''), s.answerLen);
+        }
+      }
+    }
+  });
+
+  socket.on('hint:error', (payload: any) => {
+    console.log('[socket] event hint:error', payload);
+    const msg = typeof payload?.message === 'string' ? payload.message : 'Ошибка подсказки';
+    setHintError(msg);
   });
 
   socket.on('answer:reveal', (r: any) => {
@@ -75,6 +103,8 @@ export function useSocket() {
   const setBotStatus = useGameStore((s) => s.setBotStatus);
   const setReveal = useGameStore((s) => s.setRevealAnswer);
   const setMask = useGameStore((s) => s.setAnswerMask);
+  const setCanRevealHint = useGameStore((s) => s.setCanRevealHint);
+  const setHintError = useGameStore((s) => s.setHintError);
   const onNearMiss = useGameStore((s) => s.setNearMiss);
 
   const connect = useCallback(() => {
@@ -84,7 +114,7 @@ export function useSocket() {
       const user = getUser();
       console.log('[ui] connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
       socket = connectSocket(initDataRaw);
-      setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard, setReveal, setMask, onNearMiss);
+      setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard, setReveal, setMask, setCanRevealHint, setHintError, onNearMiss);
     }
     return socket;
   }, [setRoom, setPhase, setBotStatus, setBoard]);

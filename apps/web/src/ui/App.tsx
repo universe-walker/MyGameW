@@ -176,7 +176,7 @@ export function App() {
             <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>Достижения</button>
             <div className="text-sm px-2 py-1 rounded bg-yellow-100">Проф. очки: {profileScore}</div>
             <div className="text-sm px-2 py-1 rounded bg-yellow-50">⭐ Подсказки: {hintAllowance}</div>
-            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>Магазин</button>
+            <button id="open-shop-btn" className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>Магазин</button>
           </div>
         </div>
       )}
@@ -193,6 +193,14 @@ export function App() {
               <div className="mt-2 flex gap-2">
                 <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={onJoinPendingRoom}>Присоединиться</button>
                 <button className="px-3 py-2 rounded bg-gray-200" onClick={() => setPendingRoomId(null)}>Скрыть</button>
+              </div>
+            </div>
+          )}
+          {hintAllowance === 0 && (
+            <div className="w-full max-w-md p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
+              У вас нет подсказок. Вы можете купить подсказки за Звезды в магазине.
+              <div className="mt-2">
+                <button className="px-3 py-2 rounded bg-yellow-600 text-white" onClick={openShop}>Открыть магазин</button>
               </div>
             </div>
           )}

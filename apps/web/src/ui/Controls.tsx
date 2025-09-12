@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGameStore } from '../state/store';
+import { getSocket } from '../lib/socket';
+import { useUiHome } from '../state/ui';
 
 export type ControlsProps = {
   onAnswer: (text: string) => void;
@@ -15,8 +17,13 @@ export type ControlsProps = {
 export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, solo, paused = false, showMeta = true }: ControlsProps) {
   const mask = useGameStore((s) => s.answerMask);
   const nearMissAt = useGameStore((s) => s.nearMissAt);
+  const roomId = useGameStore((s) => s.roomId);
+  const canRevealHint = useGameStore((s) => s.canRevealHint);
+  const hintErrorMsg = useGameStore((s) => s.hintErrorMsg);
   const [typed, setTyped] = useState<string>('');
   const hiddenInputRef = useRef<HTMLInputElement | null>(null);
+  const [hintMode, setHintMode] = useState(false);
+  const openShop = useUiHome((s) => s.openShop);
 
   const slots = useMemo(() => {
     if (!mask) return 64; // fallback when mask not yet received
@@ -30,6 +37,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
       setTimeout(() => hiddenInputRef.current?.focus(), 0);
     } else {
       setTyped('');
+      setHintMode(false);
     }
   }, [isMyTurnToAnswer]);
 
@@ -38,6 +46,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
     if (mask && isMyTurnToAnswer) {
       setTyped('');
       setTimeout(() => hiddenInputRef.current?.focus(), 0);
+      setHintMode(false);
     }
   }, [mask, isMyTurnToAnswer]);
 
@@ -82,6 +91,19 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
     onAnswer(out);
   };
 
+  const onHintClick = () => {
+    if (!isMyTurnToAnswer) return;
+    if (!canRevealHint) return; // UI will show shop button elsewhere
+    setHintMode((v) => !v);
+  };
+
+  const revealAt = (pos: number) => {
+    if (!roomId) return;
+    const socket = getSocket();
+    socket?.emit('hint:reveal_letter', { roomId, position: pos });
+    setHintMode(false);
+  };
+
   return (
     <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
       {isMyTurnToAnswer && (
@@ -122,7 +144,20 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
                           if (ch === '*') {
                             const v = letters[i++] ?? '*';
                             return (
-                              <span key={idx} className={v === '*' ? 'text-gray-400' : 'text-gray-900'}>
+                              <span
+                                key={idx}
+                                className={
+                                  v === '*'
+                                    ? hintMode
+                                      ? 'text-gray-400 underline decoration-dotted cursor-pointer'
+                                      : 'text-gray-400'
+                                    : 'text-gray-900'
+                                }
+                                onClick={() => {
+                                  if (hintMode && v === '*') revealAt(idx);
+                                }}
+                                role={hintMode && v === '*' ? 'button' : undefined}
+                              >
                                 {v}
                               </span>
                             );
@@ -156,6 +191,9 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
             {nearMissAt && typed.length === 0 && (
               <div className="mt-1 text-sm text-amber-700">В слове ошибка, попробуйте ещё раз</div>
             )}
+            {hintErrorMsg && (
+              <div className="mt-1 text-sm text-red-600">{hintErrorMsg}</div>
+            )}
           </div>
           <button
             onClick={submitAnswer}
@@ -163,6 +201,21 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           >
             Ответить
           </button>
+          {canRevealHint ? (
+            <button
+              onClick={onHintClick}
+              className={`px-3 py-2 rounded text-sm md:text-base ${hintMode ? 'bg-yellow-600 text-white' : 'bg-yellow-200 text-yellow-900'}`}
+            >
+              Подсказка
+            </button>
+          ) : (
+            <button
+              onClick={() => openShop()}
+              className="px-3 py-2 rounded bg-yellow-50 text-yellow-800 text-sm md:text-base"
+            >
+              Купить подсказки
+            </button>
+          )}
         </div>
       )}
       {showMeta && solo && !paused && (

@@ -50,6 +50,8 @@ export const ZProfileRes = z.object({
 // Word question reveal
 export const ZQuestionRevealWord = z.object({ len: z.number().int(), mask: z.string(), canReveal: z.boolean() });
 export const ZWordReveal = z.object({ position: z.number().int(), char: z.string().length(1) });
+// Hint request
+export const ZHintRevealReq = z.object({ roomId: z.string().uuid(), position: z.number().int().min(0) });
 
 // RoomState and bot hint contracts for solo
 export const ZRoomPlayer = z.object({ id: z.number().int(), name: z.string(), bot: z.boolean().optional() });
@@ -77,6 +79,7 @@ export type TInvoiceCreateRes = z.infer<typeof ZInvoiceCreateRes>;
 export type TProfileRes = z.infer<typeof ZProfileRes>;
 export type TQuestionRevealWord = z.infer<typeof ZQuestionRevealWord>;
 export type TWordReveal = z.infer<typeof ZWordReveal>;
+export type THintRevealReq = z.infer<typeof ZHintRevealReq>;
 export type TRoomPlayer = z.infer<typeof ZRoomPlayer>;
 export type TRoomState = z.infer<typeof ZRoomState>;
 
@@ -156,7 +159,7 @@ export type TSocketClientToServerEvents = {
   'rooms:create': () => void;
   'rooms:join': (payload: { roomId: string }) => void;
   'rooms:leave': (payload: { roomId: string }) => void;
-  'hint:reveal_letter': () => void;
+  'hint:reveal_letter': (payload: { roomId: string; position: number }) => void;
   // Solo-only controls
   'solo:pause': (payload: { roomId: string }) => void;
   'solo:resume': (payload: { roomId: string }) => void;
@@ -175,6 +178,7 @@ export type TSocketServerToClientEvents = {
   // Masked word for current question (for UI placeholders)
   'word:mask': (payload: TQuestionRevealWord) => void;
   'word:reveal': (payload: { position: number; char: string }) => void;
+  'hint:error': (payload: { message: string }) => void;
   'answer:reveal': (payload: TAnswerReveal) => void;
   // Near-miss notification to allow retry without penalty
   'answer:near_miss': (payload: { message: string }) => void;

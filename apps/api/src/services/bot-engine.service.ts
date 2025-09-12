@@ -52,6 +52,10 @@ type RoomRuntime = {
   blitzBaseValue?: number; // V from picked cell
   blitzCategory?: string;
   blitzQuestions?: { id: string; value: number; prompt: string }[];
+  // Hint/answer reveal runtime for current question
+  answerText?: string; // normalized correct answer text for current question
+  currentMask?: string; // current mask with revealed characters
+  hintUsage?: Map<number, { used: number; revealed: Set<number> }>; // per-player usage for current question
 };
 
 @Injectable()
@@ -429,7 +433,7 @@ export class BotEngineService {
     this.server?.to(roomId).emit('board:state', { roomId, round, categories } as any);
   }
 
-  private buildMaskPayload(answer: string) {
+  private buildMaskPayload(answer: string, canReveal: boolean) {
     // Build mask: letters/digits -> '*', keep spaces and hyphens
     const chars = Array.from(answer);
     const isFillable = (ch: string) => /[\p{L}\p{N}]/u.test(ch) && ch !== ' ' && ch !== '-';
@@ -446,7 +450,7 @@ export class BotEngineService {
         return '*';
       })
       .join('');
-    return { len, mask, canReveal: false };
+    return { len, mask, canReveal };
   }
 
   private async onEnterAnswerWait(roomId: string) {
@@ -468,7 +472,18 @@ export class BotEngineService {
         answer = await this.loadAnswer(cat, val);
       }
       if (!answer) return;
-      const payload = this.buildMaskPayload(answer);
+      // Determine if the current human has any hint allowance
+      let canReveal = false;
+      try {
+        const meta = await this.prisma.userMeta.findUnique({ where: { userId: BigInt(activeId!) } });
+        canReveal = (meta?.hintAllowance ?? 0) > 0;
+      } catch { /* ignore */ }
+      const payload = this.buildMaskPayload(answer, canReveal);
+      // Reset per-question hint usage and cache answer/mask
+      rr.answerText = answer;
+      rr.currentMask = payload.mask;
+      rr.hintUsage = rr.hintUsage ?? new Map();
+      rr.hintUsage.set(activeId!, { used: 0, revealed: new Set() });
       this.server?.to(roomId).emit('word:mask', payload as any);
       if (this.DEBUG_ANSWER) {
         try {
@@ -478,6 +493,52 @@ export class BotEngineService {
     } catch {
       // ignore mask errors
     }
+  }
+
+  // Exponential cost: 1,2,4,8,... per additional reveal within the same question per player
+  async attemptRevealLetter(
+    roomId: string,
+    playerId: number,
+    position: number,
+  ): Promise<{ ok: true; position: number; char: string; nextCanReveal: boolean; newMask: string } | { ok: false; error: string }> {
+    const rr = this.rooms.get(roomId);
+    if (!rr || rr.phase !== 'answer_wait') return { ok: false, error: 'Подсказка недоступна сейчас' };
+    if (rr.activePlayerId !== playerId) return { ok: false, error: 'Сейчас не ваш ход' };
+    const mask = rr.currentMask ?? '';
+    const answer = rr.answerText ?? '';
+    if (!mask || !answer) return { ok: false, error: 'Подсказка недоступна' };
+    const maskArr = Array.from(mask);
+    const ansArr = Array.from(answer);
+    if (position < 0 || position >= maskArr.length) return { ok: false, error: 'Некорректная позиция' };
+    if (maskArr[position] !== '*') return { ok: false, error: 'Эта позиция уже открыта' };
+
+    // Usage and cost
+    rr.hintUsage = rr.hintUsage ?? new Map();
+    const usage = rr.hintUsage.get(playerId) ?? { used: 0, revealed: new Set<number>() };
+    const cost = 1 << usage.used; // 1,2,4,...
+
+    let remaining = 0;
+    try {
+      const userId = BigInt(playerId);
+      const meta = await this.prisma.userMeta.findUnique({ where: { userId } });
+      const balance = meta?.hintAllowance ?? 0;
+      if (balance < cost) return { ok: false, error: 'Недостаточно подсказок. Откройте магазин, чтобы купить.' };
+      remaining = balance - cost;
+      await this.prisma.userMeta.update({ where: { userId }, data: { hintAllowance: remaining } });
+    } catch {
+      return { ok: false, error: 'Не удалось списать подсказки, попробуйте позже' };
+    }
+
+    const ch = ansArr[position] ?? '*';
+    maskArr[position] = ch;
+    rr.currentMask = maskArr.join('');
+    usage.used += 1;
+    usage.revealed.add(position);
+    rr.hintUsage.set(playerId, usage);
+
+    const nextCost = 1 << usage.used;
+    const nextCanReveal = remaining >= nextCost;
+    return { ok: true, position, char: ch, nextCanReveal, newMask: rr.currentMask };
   }
 
   private isNearMiss(a: string, b: string) {

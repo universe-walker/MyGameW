@@ -17,7 +17,21 @@ export class ProfileController {
     const user = await this.prisma.user.findUnique({ where: { id: BigInt(userId) } });
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
 
-    const meta = await this.prisma.userMeta.findUnique({ where: { userId: BigInt(userId) } });
+    let meta = await this.prisma.userMeta.findUnique({ where: { userId: BigInt(userId) } });
+
+    // DEV/testing: ensure minimum hint allowance if TEST_HINTS is set
+    const testHintsMin = Number(process.env.TEST_HINTS || '0');
+    if (testHintsMin > 0) {
+      try {
+        if (!meta) {
+          await this.prisma.userMeta.create({ data: { userId: BigInt(userId), hintAllowance: testHintsMin, profileScore: 0 } });
+          meta = await this.prisma.userMeta.findUnique({ where: { userId: BigInt(userId) } });
+        } else if ((meta.hintAllowance ?? 0) < testHintsMin) {
+          await this.prisma.userMeta.update({ where: { userId: BigInt(userId) }, data: { hintAllowance: testHintsMin } });
+          meta = await this.prisma.userMeta.findUnique({ where: { userId: BigInt(userId) } });
+        }
+      } catch {}
+    }
 
     // TODO: compute from game results; for now read profileScore from meta
     const profileScore = meta?.profileScore ?? 0;

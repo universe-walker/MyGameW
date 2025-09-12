@@ -31,6 +31,10 @@ type State = {
   answerMask: string | null;
   answerLen: number;
   nearMissAt: number | null;
+  // Hint UI state
+  canRevealHint: boolean;
+  hintErrorMsg: string | null;
+  hintErrorAt: number | null;
   // Pause state (client-side augmentation for solo mode)
   paused: boolean;
   pauseOffsetMs: number; // accumulated paused duration for current phase
@@ -48,6 +52,8 @@ type State = {
   setBotStatus: (playerId: number, status: string) => void;
   setRevealAnswer: (text: string | null) => void;
   setAnswerMask: (mask: string | null, len?: number) => void;
+  setCanRevealHint: (v: boolean) => void;
+  setHintError: (msg: string | null) => void;
   setNearMiss: () => void;
   setPaused: (paused: boolean) => void;
   leaveRoom: () => void;
@@ -68,6 +74,9 @@ export const useGameStore = create<State>((set) => ({
   answerMask: null,
   answerLen: 0,
   nearMissAt: null,
+  canRevealHint: false,
+  hintErrorMsg: null,
+  hintErrorAt: null,
   paused: false,
   pauseOffsetMs: 0,
   pauseStartedAt: null,
@@ -92,6 +101,8 @@ export const useGameStore = create<State>((set) => ({
   setRevealAnswer: (text) => set({ revealAnswer: text }),
   setAnswerMask: (mask, len) =>
     set((s) => ({ answerMask: mask, answerLen: typeof len === 'number' ? len : s.answerLen })),
+  setCanRevealHint: (v) => set({ canRevealHint: v }),
+  setHintError: (msg) => set({ hintErrorMsg: msg, hintErrorAt: msg ? Date.now() : null }),
   setNearMiss: () => set({ nearMissAt: Date.now() }),
   setPaused: (paused) =>
     set((s) => {
@@ -105,7 +116,7 @@ export const useGameStore = create<State>((set) => ({
       return { paused: false, pauseStartedAt: null, pauseOffsetMs: s.pauseOffsetMs + delta } as Partial<State> as State;
     }),
   leaveRoom: () =>
-    set({ roomId: null, solo: false, players: [], phase: 'idle', until: undefined, activePlayerId: null, botStatuses: {}, boardCategories: [], question: undefined, scores: {}, revealAnswer: null, paused: false, pauseOffsetMs: 0, pauseStartedAt: null }),
+    set({ roomId: null, solo: false, players: [], phase: 'idle', until: undefined, activePlayerId: null, botStatuses: {}, boardCategories: [], question: undefined, scores: {}, revealAnswer: null, answerMask: null, answerLen: 0, nearMissAt: null, canRevealHint: false, hintErrorMsg: null, hintErrorAt: null, paused: false, pauseOffsetMs: 0, pauseStartedAt: null }),
 }));
 
 

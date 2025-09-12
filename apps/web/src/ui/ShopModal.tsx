@@ -27,7 +27,14 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
       if (!mountedRef.current) return;
       setPending(false);
       if (data.status === 'paid') {
-        // Bot will notify the API; refresh profile in parent
+        try {
+          // Try to credit server-side in WebApp context for immediate balance update
+          await fetchApi(`/billing/credit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'hint_letter', qty: 1 }),
+          });
+        } catch {}
         onPurchaseCompleted?.();
         onClose();
       } else if (data.status === 'failed') {
@@ -65,6 +72,13 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
         if (!json.invoiceLink) throw new Error('invoiceLink отсутствует в ответе');
         openInvoice(json.invoiceLink, async (status) => {
           if (status === 'paid') {
+            try {
+              await fetchApi(`/billing/credit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'hint_letter', qty }),
+              });
+            } catch {}
             onPurchaseCompleted?.();
             onClose();
           } else if (status === 'failed') {
