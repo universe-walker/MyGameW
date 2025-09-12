@@ -107,7 +107,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
   return (
     <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
       {isMyTurnToAnswer && (
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex items-start md:items-center gap-2 w-full">
           <div className="flex-1">
             {/* Hidden input (screen reader only). Click below to focus it. */}
             <input
@@ -195,6 +195,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
               <div className="mt-1 text-sm text-red-600">{hintErrorMsg}</div>
             )}
           </div>
+          <div className="flex flex-col gap-2 self-start">
           <button
             onClick={submitAnswer}
             className="px-3 py-2 rounded bg-green-600 text-white text-sm md:text-base"
@@ -216,6 +217,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
               Купить подсказки
             </button>
           )}
+          </div>
         </div>
       )}
       {showMeta && solo && !paused && (
