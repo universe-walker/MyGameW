@@ -19,6 +19,10 @@ export function App() {
   const { shopOpen, achievementsOpen, openShop, closeShop, openAchievements, closeAchievements } = useUiHome();
   const [profileScore, setProfileScore] = useState<number>(0);
   const [hintAllowance, setHintAllowance] = useState<number>(0);
+  const testHintAllowance = Number(import.meta.env.VITE_TEST_HINTS);
+  useEffect(() => {
+    if (testHintAllowance > 0) setHintAllowance(testHintAllowance);
+  }, [testHintAllowance]);
   const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
   const [, setGameStarted] = useState(false);
 

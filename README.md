@@ -29,13 +29,15 @@
      # Dev-режим: позволить работу без Telegram initData
      ALLOW_DEV_NO_TG=1
      ```
-   - Web (`apps/web/.env`):
-     ```env
-     VITE_API_BASE_URL=http://localhost:4000
-     VITE_API_PATH_PREFIX=
-     # Включить встроенную консоль логов в UI
-     VITE_DEBUG_CONSOLE=true
-     ```
+  - Web (`apps/web/.env`):
+    ```env
+    VITE_API_BASE_URL=http://localhost:4000
+    VITE_API_PATH_PREFIX=
+    # Включить встроенную консоль логов в UI
+    VITE_DEBUG_CONSOLE=true
+    # Начальное количество подсказок (только для тестов)
+    VITE_TEST_HINTS=
+    ```
 5) Применить миграции и (по необходимости) сиды БД:
    ```bash
    pnpm --filter @mygame/api prisma:migrate
@@ -72,6 +74,7 @@ curl -H "X-Telegram-Init-Data: <raw_query_string_from_telegram>" http://localhos
   - `VITE_API_BASE_URL` — базовый URL API
   - `VITE_API_PATH_PREFIX` — префикс (если API за реверс-прокси, например `/api`)
   - `VITE_DEBUG_CONSOLE` — включает встроенную консоль логов
+  - `VITE_TEST_HINTS` — начальное количество подсказок для тестов
   - Для dev через ngrok HMR: `NGROK_HOST` (см. `apps/web/vite.config.ts`)
 
 ## Команды
