@@ -3,6 +3,7 @@ import { ZInvoiceCreateReq, ZInvoiceCreateRes } from '@mygame/shared';
 import { PrismaService } from '../services/prisma.service';
 import { TelegramAuthGuard } from './telegram-auth.guard';
 import { z } from 'zod';
+import { TelemetryService } from '../services/telemetry.service';
 
 type CreateInvoiceLinkReq = {
   title: string;
@@ -14,7 +15,7 @@ type CreateInvoiceLinkReq = {
 
 @Controller('billing')
 export class BillingController {
-  constructor(@Optional() private prisma?: PrismaService) {}
+  constructor(@Optional() private prisma?: PrismaService, @Optional() private telemetry?: TelemetryService) {}
   @Post('invoice')
   async createInvoice(@Body() body: unknown) {
     const parsed = ZInvoiceCreateReq.safeParse(body);
@@ -130,6 +131,7 @@ export class BillingController {
     });
     const parsed = ZBotConfirmReq.safeParse(body);
     if (!parsed.success) {
+      this.telemetry?.paymentConfirmError('invalid_body');
       throw new HttpException('Invalid body', HttpStatus.BAD_REQUEST);
     }
     const { telegram_payment_charge_id, currency, total_amount, invoice_payload } = parsed.data;
@@ -139,13 +141,16 @@ export class BillingController {
     try {
       payload = JSON.parse(invoice_payload);
     } catch {
+      this.telemetry?.paymentConfirmError('invalid_payload');
       throw new HttpException('Invalid payload', HttpStatus.BAD_REQUEST);
     }
     if (payload.kind !== 'purchase' || payload.type !== 'hint_letter') {
+      this.telemetry?.paymentConfirmError('unsupported_payload', { payload });
       throw new HttpException('Unsupported payload', HttpStatus.BAD_REQUEST);
     }
     const userIdNum = Number(payload.userId);
     if (!Number.isInteger(userIdNum) || userIdNum <= 0) {
+      this.telemetry?.paymentConfirmError('invalid_user_id', { userId: payload.userId });
       throw new HttpException('Invalid userId', HttpStatus.BAD_REQUEST);
     }
 
@@ -154,10 +159,12 @@ export class BillingController {
     const priceQty2 = Number(process.env.STARS_PRICE_TWO_LETTERS || String(pricePerLetter * 2 - 1));
     const expected = payload.qty === 1 ? pricePerLetter : priceQty2;
     if (total_amount !== expected) {
+      this.telemetry?.paymentConfirmError('amount_mismatch', { total_amount, expected });
       throw new HttpException('Amount mismatch', HttpStatus.BAD_REQUEST);
     }
 
     if (!this.prisma) {
+      this.telemetry?.paymentConfirmError('no_prisma_service');
       throw new HttpException('Server misconfigured: no PrismaService', HttpStatus.INTERNAL_SERVER_ERROR);
     }
     const userId = BigInt(userIdNum);
@@ -177,7 +184,10 @@ export class BillingController {
 
     // Idempotency: if this charge was already processed, do nothing
     const existing = await this.prisma.billingPurchase.findFirst({ where: { tgPaymentId: telegram_payment_charge_id } });
-    if (existing) return { ok: true, alreadyProcessed: true };
+    if (existing) {
+      this.telemetry?.paymentConfirmOk(Number(userId), payload.qty, telegram_payment_charge_id);
+      return { ok: true, alreadyProcessed: true };
+    }
 
     await this.prisma.$transaction([
       this.prisma.userMeta.upsert({
@@ -196,6 +206,7 @@ export class BillingController {
       }),
     ]);
 
+    this.telemetry?.paymentConfirmOk(Number(userId), payload.qty, telegram_payment_charge_id);
     return { ok: true };
   }
 }

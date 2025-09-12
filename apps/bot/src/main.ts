@@ -10,6 +10,7 @@ if (!botToken) {
 const WEBAPP_BASE_URL = process.env.BOT_WEBAPP_BASE_URL || process.env.WEBAPP_BASE_URL || '';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:4000';
 const BILLING_BOT_SECRET = process.env.BILLING_BOT_SECRET || '';
+const BILLING_ALERT_CHAT_ID = process.env.BILLING_ALERT_CHAT_ID || '';
 
 console.log('🚀 Starting bot...');
 console.log('Environment variables:');
@@ -17,6 +18,7 @@ console.log(`- BOT_TELEGRAM_BOT_TOKEN: ${botToken}`);
 console.log(`- WEBAPP_BASE_URL: ${WEBAPP_BASE_URL || '❌ Missing'}`);
 console.log(`- API_BASE_URL: ${API_BASE_URL}`);
 console.log(`- BILLING_BOT_SECRET: ${BILLING_BOT_SECRET ? 'set' : 'missing'}`);
+console.log(`- BILLING_ALERT_CHAT_ID: ${BILLING_ALERT_CHAT_ID ? 'set' : 'missing'}`);
 
 const bot = new Bot(botToken);
 
@@ -89,10 +91,27 @@ bot.on('message:successful_payment', async (ctx) => {
       body: JSON.stringify({ telegram_payment_charge_id, currency, total_amount, invoice_payload }),
     });
     const txt = await res.text().catch(() => '');
-    if (!res.ok) console.error('[bot] /billing/confirm failed', res.status, txt);
-    else console.log('[bot] /billing/confirm ok', txt);
+    if (!res.ok) {
+      console.error('[bot] /billing/confirm failed', res.status, txt);
+      if (BILLING_ALERT_CHAT_ID) {
+        try {
+          await bot.api.sendMessage(Number(BILLING_ALERT_CHAT_ID), `Billing confirm failed:\nstatus=${res.status}\n${txt}`);
+        } catch (e) {
+          console.error('[bot] failed to alert admin chat', e);
+        }
+      }
+    } else {
+      console.log('[bot] /billing/confirm ok', txt);
+    }
   } catch (e) {
     console.error('[bot] payment confirm handler error', e);
+    if (BILLING_ALERT_CHAT_ID) {
+      try {
+        await bot.api.sendMessage(Number(BILLING_ALERT_CHAT_ID), `Billing handler error: ${(e as Error)?.message || String(e)}`);
+      } catch (e2) {
+        console.error('[bot] failed to alert admin chat (handler error)', e2);
+      }
+    }
   }
 });
 

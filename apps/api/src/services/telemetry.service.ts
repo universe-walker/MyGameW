@@ -19,4 +19,12 @@ export class TelemetryService {
     // eslint-disable-next-line no-console
     console.log('[telemetry] hint_used', { roomId, byPlayerId });
   }
+  paymentConfirmOk(userId: number, qty: number, chargeId: string) {
+    // eslint-disable-next-line no-console
+    console.log('[telemetry] payment_confirm_ok', { userId, qty, chargeId });
+  }
+  paymentConfirmError(reason: string, meta?: Record<string, unknown>) {
+    // eslint-disable-next-line no-console
+    console.error('[telemetry] payment_confirm_error', { reason, ...(meta || {}) });
+  }
 }

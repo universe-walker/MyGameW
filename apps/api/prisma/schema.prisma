@@ -93,7 +93,7 @@ model BillingPurchase {
   type            BillingType
   qty             Int
   status          BillingStatus @default(paid)
-  tgPaymentId     String        @db.Text
+  tgPaymentId     String        @unique @db.Text
 
   User User @relation(fields: [userId], references: [id])
 

@@ -215,11 +215,19 @@ export function App() {
         open={shopOpen}
         onClose={closeShop}
         onPurchaseCompleted={async () => {
-          const r = await fetchApi(`/profile`);
-          if (r.ok) {
-            const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
-            if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
-            if (typeof j.hintAllowance === 'number') setHintAllowance(j.hintAllowance);
+          const prev = hintAllowance;
+          const attempts = 6;
+          for (let i = 0; i < attempts; i++) {
+            const r = await fetchApi(`/profile`);
+            if (r.ok) {
+              const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
+              if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
+              if (typeof j.hintAllowance === 'number') {
+                setHintAllowance(j.hintAllowance);
+                if (j.hintAllowance > prev) break; // balance updated
+              }
+            }
+            if (i < attempts - 1) await new Promise((res) => setTimeout(res, 500));
           }
         }}
       />
@@ -228,5 +236,4 @@ export function App() {
     </div>
   );
 }
-
 
