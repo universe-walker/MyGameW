@@ -38,7 +38,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   handleConnection(client: Socket) {
     const initDataRaw = client.handshake.auth?.initDataRaw as string | undefined;
-    const token = process.env.TELEGRAM_BOT_TOKEN || '';
+    const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
     const allowDev = process.env.ALLOW_DEV_NO_TG === '1' || !token;
     if (!initDataRaw || !verifyInitData(initDataRaw, token).ok) {
       if (!allowDev) {

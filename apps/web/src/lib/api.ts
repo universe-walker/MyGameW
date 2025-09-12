@@ -7,6 +7,8 @@ const base =
 const prefix = ((import.meta as any).env?.VITE_API_PATH_PREFIX || (window as any).API_PATH_PREFIX || '') as string;
 
 export const apiBase = `${base}${prefix}`;
+export const apiHostBase = base as string;
+export const apiPathPrefix = prefix as string;
 
 export async function fetchApi(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers || {});

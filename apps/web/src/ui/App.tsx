@@ -170,17 +170,13 @@ export function App() {
     <div className="min-h-full flex flex-col p-4">
       {/* AppBar (hidden for solo game page) */}
       {!(roomId && solo) && (
-        <div className="flex items-center justify-between">
-          <div className="text-xl font-bold">MyGame</div>
-          <div className="flex items-center gap-3">
-            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>
-              Достижения
-            </button>
+        <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xl font-bold text-center sm:text-left">MyGame</div>
+          <div className="w-full sm:w-auto flex flex-wrap items-center justify-center sm:justify-end gap-2">
+            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>Достижения</button>
             <div className="text-sm px-2 py-1 rounded bg-yellow-100">Проф. очки: {profileScore}</div>
             <div className="text-sm px-2 py-1 rounded bg-yellow-50">⭐ Подсказки: {hintAllowance}</div>
-            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>
-              Магазин
-            </button>
+            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>Магазин</button>
           </div>
         </div>
       )}
@@ -236,4 +232,3 @@ export function App() {
     </div>
   );
 }
-

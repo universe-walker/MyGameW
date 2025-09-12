@@ -7,6 +7,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Default to same-origin API under "/api" when not provided at build time.
+      // This is helpful for ngrok/mobile WebApp testing.
+      window.API_BASE_URL = window.API_BASE_URL || location.origin;
+      window.API_PATH_PREFIX = window.API_PATH_PREFIX || '/api';
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
   </html>

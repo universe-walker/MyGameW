@@ -15,5 +15,15 @@ export default defineConfig({
       host: ngrokHost,
       clientPort: 443,
     },
+    proxy: {
+      // Proxy API (REST + Socket.IO) through the dev server so the WebApp can use same-origin HTTPS
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
   },
 });

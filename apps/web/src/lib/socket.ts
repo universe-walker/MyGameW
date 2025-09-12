@@ -1,11 +1,11 @@
 import { io } from 'socket.io-client';
 import type { Socket } from '@mygame/shared';
-import { apiBase } from './api';
+import { apiHostBase, apiPathPrefix } from './api';
 
 let socket: Socket | null = null;
 
 export function connectSocket(initDataRaw: string) {
-  const nsUrl = `${apiBase}/game`;
+  const nsUrl = `${apiHostBase}/game`;
 
   if (socket) {
     console.log(
@@ -23,7 +23,10 @@ export function connectSocket(initDataRaw: string) {
   });
 
   socket = io(nsUrl, {
-    transports: ['websocket'],
+    // Ensure the Socket.IO handshake goes through the Vite proxy prefix
+    path: `${apiPathPrefix || ''}/socket.io` || '/socket.io',
+    // Allow fallback to polling when websockets are blocked by proxies
+    transports: ['websocket', 'polling'],
     auth: { initDataRaw },
   }) as unknown as Socket;
 
