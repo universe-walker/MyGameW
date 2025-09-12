@@ -453,6 +453,11 @@ export class BotEngineService {
     return { len, mask, canReveal };
   }
 
+  private getTestHints(): number {
+    const v = Number(process.env.TEST_HINTS);
+    return Number.isInteger(v) && v > 0 ? v : 0;
+  }
+
   private async onEnterAnswerWait(roomId: string) {
     const rr = this.rooms.get(roomId);
     if (!rr) return;
@@ -473,11 +478,14 @@ export class BotEngineService {
       }
       if (!answer) return;
       // Determine if the current human has any hint allowance
-      let canReveal = false;
-      try {
-        const meta = await this.prisma.userMeta.findUnique({ where: { userId: BigInt(activeId!) } });
-        canReveal = (meta?.hintAllowance ?? 0) > 0;
-      } catch { /* ignore */ }
+      // For testing, TEST_HINTS>0 should enable reveal regardless of DB state
+      let canReveal = this.getTestHints() > 0;
+      if (!canReveal) {
+        try {
+          const meta = await this.prisma.userMeta.findUnique({ where: { userId: BigInt(activeId!) } });
+          canReveal = (meta?.hintAllowance ?? 0) > 0;
+        } catch { /* ignore */ }
+      }
       const payload = this.buildMaskPayload(answer, canReveal);
       // Reset per-question hint usage and cache answer/mask
       rr.answerText = answer;
@@ -516,6 +524,25 @@ export class BotEngineService {
     rr.hintUsage = rr.hintUsage ?? new Map();
     const usage = rr.hintUsage.get(playerId) ?? { used: 0, revealed: new Set<number>() };
     const cost = 1 << usage.used; // 1,2,4,...
+
+    // Test mode: allow hints based on TEST_HINTS without touching DB
+    const testHints = this.getTestHints();
+    if (testHints > 0) {
+      // Total already spent before this attempt = 2^used - 1
+      const spentSoFar = (1 << usage.used) - 1;
+      if (testHints < spentSoFar + cost) {
+        return { ok: false, error: 'Недостаточно подсказок. Купите больше в магазине.' } as any;
+      }
+      const ch = ansArr[position] ?? '*';
+      maskArr[position] = ch;
+      rr.currentMask = maskArr.join('');
+      usage.used += 1;
+      usage.revealed.add(position);
+      rr.hintUsage.set(playerId, usage);
+      const nextCost = 1 << usage.used;
+      const nextCanReveal = testHints >= (spentSoFar + cost + nextCost);
+      return { ok: true, position, char: ch, nextCanReveal, newMask: rr.currentMask };
+    }
 
     let remaining = 0;
     try {
