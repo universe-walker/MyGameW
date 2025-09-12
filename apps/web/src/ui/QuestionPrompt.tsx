@@ -1,11 +1,13 @@
 import type { CurrentQuestion } from '../state/store';
 import { useGameStore } from '../state/store';
+import type { ReactNode } from 'react';
 
 export type QuestionPromptProps = {
   question?: CurrentQuestion;
+  children?: ReactNode;
 };
 
-export function QuestionPrompt({ question }: QuestionPromptProps) {
+export function QuestionPrompt({ question, children }: QuestionPromptProps) {
   const reveal = useGameStore((s) => s.revealAnswer);
   if (!question && !reveal) return null;
   return (
@@ -23,6 +25,7 @@ export function QuestionPrompt({ question }: QuestionPromptProps) {
           Правильный ответ: <span className="font-semibold">{reveal}</span>
         </div>
       )}
+      {children && <div className="mt-3">{children}</div>}
     </div>
   );
 }

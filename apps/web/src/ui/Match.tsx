@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGameStore } from '../state/store';
 import { Board } from './Board';
 import { QuestionPrompt } from './QuestionPrompt';
@@ -49,6 +49,50 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const canPick = phase === 'prepare' && activePlayerId === myId;
   const showBoard = phase === 'prepare';
 
+  // Keep layout stable between phases: remember board height and reuse it
+  const boardWrapRef = useRef<HTMLDivElement | null>(null);
+  const questionAreaRef = useRef<HTMLDivElement | null>(null);
+  const [boardHeight, setBoardHeight] = useState<number>(0);
+  useEffect(() => {
+    if (!showBoard) return; // measure only when board is visible
+    const el = boardWrapRef.current;
+    if (!el) return;
+    const measure = () => {
+      const h = Math.round(el.offsetHeight || 0);
+      if (h > 0 && Math.abs(h - boardHeight) > 2) setBoardHeight(h);
+    };
+    // First measure after paint
+    const id = requestAnimationFrame(measure);
+    // Observe size changes while board is visible
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => measure());
+      ro.observe(el);
+    } else {
+      window.addEventListener('resize', measure);
+    }
+    return () => {
+      cancelAnimationFrame(id);
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [showBoard, boardHeight]);
+
+  // When it's my turn to answer, bring the question area into view
+  useEffect(() => {
+    if (isMyTurnToAnswer) {
+      const el = questionAreaRef.current;
+      if (el && typeof el.scrollIntoView === 'function') {
+        try {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch {
+          // no-op if smooth scrolling unsupported
+          el.scrollIntoView(true as any);
+        }
+      }
+    }
+  }, [isMyTurnToAnswer]);
+
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
       {/* Phase + timer */}
@@ -64,36 +108,55 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         )}
       </div>
 
-      {/* Board: горизонтальный скролл при узких экранах, без растягивания по высоте */}
+      {/* Board: горизонтальный скролл на узких экранах */}
       {showBoard && (
-        <div className="w-full overflow-x-auto">
+        <div ref={boardWrapRef} className="w-full overflow-x-auto">
           <Board roomId={roomId} board={board} canPick={canPick} />
         </div>
       )}
 
-      <QuestionPrompt question={question} />
+      {/* Question area keeps at least the last measured board height
+          to avoid vertical jumps when switching phases. */}
+      <div ref={questionAreaRef} style={{ minHeight: !showBoard ? (boardHeight || 300) : undefined, transition: 'min-height 150ms ease' }}>
+        <QuestionPrompt question={question} />
 
-      {/* Super-game MCQ options */}
-      {isMyTurnToAnswer && hasOptions && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {question!.options!.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => onAnswer(opt)}
-              className="px-3 py-2 rounded bg-indigo-600 text-white text-sm md:text-base text-left"
-            >
-              {opt}
-            </button>
-          ))}
+        {/* Options under the question (not inside the yellow card) */}
+        {isMyTurnToAnswer && hasOptions && (
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {question!.options!.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => onAnswer(opt)}
+                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm md:text-base text-left"
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Inline answer input under the question (no meta buttons) */}
+        <div className="mt-2">
+          <Controls
+            onAnswer={onAnswer}
+            onPause={onPause}
+            onResume={onResume}
+            onLeave={onLeave}
+            isMyTurnToAnswer={isMyTurnToAnswer && !hasOptions}
+            solo={solo}
+            paused={paused}
+            showMeta={false}
+          />
         </div>
-      )}
+      </div>
 
+      {/* Meta controls (pause/resume/leave) below */}
       <Controls
         onAnswer={onAnswer}
         onPause={onPause}
         onResume={onResume}
         onLeave={onLeave}
-        isMyTurnToAnswer={isMyTurnToAnswer && !hasOptions}
+        isMyTurnToAnswer={false}
         solo={solo}
         paused={paused}
       />

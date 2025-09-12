@@ -9,9 +9,10 @@ export type ControlsProps = {
   isMyTurnToAnswer: boolean;
   solo: boolean;
   paused?: boolean;
+  showMeta?: boolean;
 };
 
-export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, solo, paused = false }: ControlsProps) {
+export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, solo, paused = false, showMeta = true }: ControlsProps) {
   const mask = useGameStore((s) => s.answerMask);
   const nearMissAt = useGameStore((s) => s.nearMissAt);
   const [typed, setTyped] = useState<string>('');
@@ -165,7 +166,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           <div className="text-xs text-green-700 whitespace-nowrap">Печать с клавиатуры</div>
         </div>
       )}
-      {solo && !paused && (
+      {showMeta && solo && !paused && (
         <button
           onClick={onPause}
           className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
@@ -173,7 +174,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           Пауза
         </button>
       )}
-      {solo && paused && (
+      {showMeta && solo && paused && (
         <button
           onClick={onResume}
           className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
@@ -181,12 +182,14 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           Продолжить
         </button>
       )}
+      {showMeta && (
       <button
         onClick={onLeave}
         className="ml-auto px-3 py-2 rounded bg-red-100 text-red-700 text-sm md:text-base whitespace-nowrap"
       >
         Выйти
       </button>
+      )}
     </div>
   );
 }
