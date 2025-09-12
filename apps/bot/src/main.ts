@@ -7,7 +7,9 @@ if (!botToken) {
   process.exit(1);
 }
 
-const WEBAPP_BASE_URL = process.env.BOT_WEBAPP_BASE_URL || process.env.WEBAPP_BASE_URL || '';
+const NGROK_HOST = process.env.NGROK_HOST || '';
+const RAW_WEBAPP_BASE_URL = process.env.BOT_WEBAPP_BASE_URL || process.env.WEBAPP_BASE_URL || '';
+const WEBAPP_BASE_URL = RAW_WEBAPP_BASE_URL || (NGROK_HOST ? `https://${NGROK_HOST}` : '');
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:4000';
 const BILLING_BOT_SECRET = process.env.BILLING_BOT_SECRET || '';
 const BILLING_ALERT_CHAT_ID = process.env.BILLING_ALERT_CHAT_ID || '';
@@ -16,6 +18,7 @@ console.log('🚀 Starting bot...');
 console.log('Environment variables:');
 console.log(`- BOT_TELEGRAM_BOT_TOKEN: ${botToken}`);
 console.log(`- WEBAPP_BASE_URL: ${WEBAPP_BASE_URL || '❌ Missing'}`);
+console.log(`- NGROK_HOST: ${NGROK_HOST || '❌ Missing'}`);
 console.log(`- API_BASE_URL: ${API_BASE_URL}`);
 console.log(`- BILLING_BOT_SECRET: ${BILLING_BOT_SECRET ? 'set' : 'missing'}`);
 console.log(`- BILLING_ALERT_CHAT_ID: ${BILLING_ALERT_CHAT_ID ? 'set' : 'missing'}`);
@@ -65,7 +68,16 @@ bot.command('start', async (ctx) => {
     await ctx.reply(`Комната создана: ${roomId}. WEBAPP_BASE_URL не настроен.`);
     return;
   }
-  const url = `${WEBAPP_BASE_URL}?start_param=room_${roomId}`;
+  if (!WEBAPP_BASE_URL.startsWith('https://')) {
+    await ctx.reply(
+      `Комната создана: ${roomId}. Некорректный WEBAPP_BASE_URL для кнопки Web App в Telegram.\n` +
+        `Текущий: ${WEBAPP_BASE_URL}\n` +
+        `Требуется: HTTPS-домен (например, https://<ngrok-host>).`
+    );
+    return;
+  }
+  const base = WEBAPP_BASE_URL.endsWith('/') ? WEBAPP_BASE_URL.slice(0, -1) : WEBAPP_BASE_URL;
+  const url = `${base}/?start_param=room_${roomId}`;
   const keyboard = new InlineKeyboard().webApp('Открыть игру', url);
   await ctx.reply(`Комната создана: ${roomId}`, { reply_markup: keyboard });
 });
