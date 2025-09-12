@@ -9,17 +9,45 @@ export type BoardProps = {
   canPick: boolean;
 };
 
+// Snapshot of board layout by roomId to persist across unmounts during a round
+const boardSnapshotByRoom: Map<string, { cats: string[]; costs: number[] }> = new Map();
+
 export function Board({ roomId, board, canPick }: BoardProps) {
+  const roomKey = roomId || '__global__';
   const grid = useMemo(() => {
-    const cats = board.map((c) => c.title);
+    const currentCats = board.map((c) => c.title);
     const valuesSet = new Set<number>();
     board.forEach((c) => c.values.forEach((v) => valuesSet.add(v)));
     const MAX_ROWS = 5;
-    const costs = Array.from(valuesSet)
-      .sort((a, b) => a - b)
-      .slice(0, MAX_ROWS);
+    const computedCosts = Array.from(valuesSet).sort((a, b) => a - b).slice(0, MAX_ROWS);
+    const snap = boardSnapshotByRoom.get(roomKey);
+    const cats = snap?.cats?.length ? snap.cats : currentCats;
+    const costs = snap?.costs?.length ? snap.costs : computedCosts;
     return { cats, costs };
-  }, [board]);
+  }, [board, roomKey]);
+
+  // Capture or update snapshot: set once per room for a round;
+  // reset if categories clearly change (new round with new titles)
+  useEffect(() => {
+    const currentCats = board.map((c) => c.title);
+    const valuesSet = new Set<number>();
+    board.forEach((c) => c.values.forEach((v) => valuesSet.add(v)));
+    const MAX_ROWS = 5;
+    const computedCosts = Array.from(valuesSet).sort((a, b) => a - b).slice(0, MAX_ROWS);
+    const snap = boardSnapshotByRoom.get(roomKey);
+    if (!snap) {
+      if (currentCats.length || computedCosts.length) {
+        boardSnapshotByRoom.set(roomKey, { cats: currentCats, costs: computedCosts });
+      }
+      return;
+    }
+    // If we detect new category titles not present in the snapshot, treat as a new board
+    const snapSet = new Set(snap.cats);
+    const hasNewTitle = currentCats.some((t) => !snapSet.has(t));
+    if (hasNewTitle && (currentCats.length > 0 || computedCosts.length > 0)) {
+      boardSnapshotByRoom.set(roomKey, { cats: currentCats, costs: computedCosts });
+    }
+  }, [board, roomKey]);
 
   const headerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [headerHeight, setHeaderHeight] = useState<number>(0);
@@ -129,4 +157,3 @@ export function Board({ roomId, board, canPick }: BoardProps) {
     </div>
   );
 }
-
