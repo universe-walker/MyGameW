@@ -21,7 +21,15 @@ export class ProfileController {
 
     // TODO: compute from game results; for now read profileScore from meta
     const profileScore = meta?.profileScore ?? 0;
-    const hintAllowance = meta?.hintAllowance ?? 0;
+
+    let hintAllowance = meta?.hintAllowance ?? 0;
+    const testHints = process.env.TEST_HINTS;
+    if (testHints !== undefined) {
+      const parsedHints = Number(testHints);
+      if (!Number.isInteger(parsedHints) || parsedHints < 0)
+        throw new HttpException('Invalid TEST_HINTS value', HttpStatus.BAD_REQUEST);
+      hintAllowance = parsedHints;
+    }
 
     // TODO: fetch real achievements; placeholder empty list
     const achievements: Array<{ code: string; title: string; progress: number }> = [];
