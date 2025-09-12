@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { Player } from '../state/store';
 
 export type ScoreboardProps = {
@@ -8,23 +9,66 @@ export type ScoreboardProps = {
 };
 
 export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: ScoreboardProps) {
+  // Track previous scores to compute deltas
+  const prevScoresRef = useRef<Record<string, number>>({});
+  const [bursts, setBursts] = useState<Array<{ id: number; playerId: number; delta: number }>>([]);
+  const seqRef = useRef(1);
+
+  useEffect(() => {
+    if (!scores) return;
+    const nextPrev = { ...prevScoresRef.current };
+    players.forEach((p) => {
+      const k = String(p.id);
+      const prev = nextPrev[k];
+      const cur = scores[k] ?? 0;
+      if (prev !== undefined) {
+        const delta = cur - prev;
+        if (delta !== 0) {
+          const id = seqRef.current++;
+          setBursts((arr) => [...arr, { id, playerId: p.id, delta }]);
+          // Cleanup after animation ends
+          setTimeout(() => {
+            setBursts((arr) => arr.filter((b) => b.id !== id));
+          }, 1200);
+        }
+      }
+      nextPrev[k] = cur;
+    });
+    prevScoresRef.current = nextPrev;
+  }, [scores, players]);
+
   return (
     <div className="grid grid-cols-3 gap-3">
-      {players.map((p, i) => (
-        <div key={p.id} className="rounded bg-slate-800 text-white p-3 flex flex-col items-center">
-          <div className="text-sm opacity-80">{p.bot ? `Бот ${i + 1}` : 'Вы'}</div>
-          <div className="text-lg font-semibold">{p.name}</div>
-          <div className="mt-2 text-2xl">{scores?.[String(p.id)] ?? 0}</div>
-          {p.bot ? (
-            <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? '...'}</div>
-          ) : (
-            <div className={`mt-1 text-xs ${isMyTurnToAnswer ? 'text-green-300' : 'text-gray-400'}`}>
-              {isMyTurnToAnswer ? 'Ваш ход' : 'Ожидание'}
+      {players.map((p, i) => {
+        const score = scores?.[String(p.id)] ?? 0;
+        const myBursts = bursts.filter((b) => b.playerId === p.id);
+        return (
+          <div key={p.id} className="relative overflow-visible rounded bg-slate-800 text-white p-3 flex flex-col items-center">
+            {/* Floating score deltas */}
+            <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-2 z-10 flex flex-col items-center gap-1">
+              {myBursts.map((b) => (
+                <span
+                  key={b.id}
+                  className={`score-burst text-sm font-bold ${b.delta > 0 ? 'text-green-400' : 'text-red-400'}`}
+                >
+                  {b.delta > 0 ? `+${b.delta}` : `${b.delta}`}
+                </span>
+              ))}
             </div>
-          )}
-        </div>
-      ))}
+
+            <div className="text-sm opacity-80">{p.bot ? `Бот ${i + 1}` : 'Игрок'}</div>
+            <div className="text-lg font-semibold">{p.name}</div>
+            <div className="mt-2 text-2xl">{score}</div>
+            {p.bot ? (
+              <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? '...'}</div>
+            ) : (
+              <div className={`mt-1 text-xs ${isMyTurnToAnswer ? 'text-green-300' : 'text-gray-400'}`}>
+                {isMyTurnToAnswer ? 'Ваш ход' : 'Ожидание'}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
-

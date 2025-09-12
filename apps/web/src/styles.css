@@ -4,4 +4,15 @@
 
 html, body, #root { height: 100%; }
 
+@keyframes score-burst-up {
+  0% { opacity: 0; transform: translateY(0) scale(0.9); }
+  10% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-28px) scale(1); }
+}
+
+.score-burst {
+  animation: score-burst-up 1s ease-out forwards;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
 
