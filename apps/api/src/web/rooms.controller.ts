@@ -2,6 +2,7 @@ import { Controller, Post, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../services/prisma.service';
 import { RedisService } from '../services/redis.service';
 import { ZRoomsCreateRes } from '@mygame/shared';
+import type { TRoomPlayer } from '@mygame/shared';
 import { randomUUID } from 'crypto';
 import { TelegramAuthGuard } from './telegram-auth.guard';
 
@@ -21,7 +22,7 @@ export class RoomsController {
       console.warn('[rooms.create] prisma.room.create failed; continuing with Redis-only room. Error:', e);
     }
     const now = Date.now();
-    await this.redis.client.hset(`room:${id}:meta`, { createdAt: String(now) });
+    await this.redis.setRoomMeta(id, { createdAt: now });
     return ZRoomsCreateRes.parse({ roomId: id });
   }
 
@@ -37,23 +38,14 @@ export class RoomsController {
       console.warn('[rooms.solo] prisma.room.create failed; continuing with Redis-only room. Error:', e);
     }
     const now = Date.now();
-    await this.redis.client.hset(`room:${id}:meta`, {
-      createdAt: String(now),
-      solo: '1',
-      botCount: String(botCount),
-    });
+    await this.redis.setRoomMeta(id, { createdAt: now, solo: true, botCount });
     // Seed bots into players set (IDs use negative numbers to avoid collision with real users)
-    const bots = Array.from({ length: botCount }).map((_, i) => ({
+    const bots: TRoomPlayer[] = Array.from({ length: botCount }).map((_, i) => ({
       id: -1 - i,
       name: `Bot #${i + 1}`,
       bot: true,
     }));
-    if (bots.length) {
-      await this.redis.client.sadd(
-        `room:${id}:players`,
-        ...bots.map((b) => JSON.stringify(b)),
-      );
-    }
+    if (bots.length) await this.redis.addPlayers(id, bots);
     return ZRoomsCreateRes.parse({ roomId: id });
   }
 }

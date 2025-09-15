@@ -19,6 +19,7 @@ import {
   ZSoloPauseReq,
   ZSoloResumeReq,
 } from '@mygame/shared';
+import type { TRoomPlayer } from '@mygame/shared';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { BotEngineService } from '../services/bot-engine.service';
@@ -69,7 +70,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async onRoomsCreate(@ConnectedSocket() client: Socket) {
     const roomId = crypto.randomUUID();
     const now = Date.now();
-    await this.redis.client.hset(`room:${roomId}:meta`, { createdAt: String(now), solo: '0', botCount: '0' });
+    await this.redis.setRoomMeta(roomId, { createdAt: now, solo: false, botCount: 0 });
     const state = { roomId, solo: false, players: [], createdAt: now };
     client.emit('room:state', state as any);
   }
@@ -85,13 +86,12 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const { roomId } = parsed.data;
     await client.join(roomId);
     const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
-    const player = user ? { id: user.id, name: user.first_name || 'User' } : { id: 0, name: 'Anon' };
-    await this.redis.client.sadd(`room:${roomId}:players`, JSON.stringify(player));
-    const all = await this.redis.client.smembers(`room:${roomId}:players`);
-    const players = all.map((p) => JSON.parse(p) as { id: number; name: string; bot?: boolean });
-    const meta = await this.redis.client.hgetall(`room:${roomId}:meta`);
-    const createdAt = meta.createdAt ? Number(meta.createdAt) : Date.now();
-    const solo = meta.solo === '1';
+    const player: TRoomPlayer = user ? { id: user.id, name: user.first_name || 'User' } : { id: 0, name: 'Anon' };
+    await this.redis.addPlayer(roomId, player);
+    const players = await this.redis.getPlayers(roomId);
+    const meta = await this.redis.getRoomMeta(roomId);
+    const createdAt = meta.createdAt;
+    const solo = meta.solo;
     const state = { roomId, solo, players, createdAt };
     this.server.to(roomId).emit('room:state', state as any);
     if (solo && !this.engine.isRunning(roomId)) {
@@ -110,27 +110,16 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       return;
     }
     const roomId = parsed.data.roomId;
-    // Remove player from Redis set if we can identify them
+    // Remove player by id with id-centric storage
     const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
-    const all = await this.redis.client.smembers(`room:${roomId}:players`);
-    const playerToRemove = all.find((p) => {
-      try {
-        const player = JSON.parse(p) as { id: number };
-        return user ? player.id === user.id : player.id === 0;
-      } catch {
-        return false;
-      }
-    });
-    if (playerToRemove) {
-      await this.redis.client.srem(`room:${roomId}:players`, playerToRemove);
-    }
+    const playerId = user ? user.id : 0;
+    await this.redis.removePlayer(roomId, playerId);
     await client.leave(roomId);
     // Emit updated room state to remaining clients
-    const remaining = await this.redis.client.smembers(`room:${roomId}:players`);
-    const players = remaining.map((p) => JSON.parse(p) as { id: number; name: string; bot?: boolean });
-    const meta = await this.redis.client.hgetall(`room:${roomId}:meta`);
-    const createdAt = meta.createdAt ? Number(meta.createdAt) : Date.now();
-    const solo = meta.solo === '1';
+    const players = await this.redis.getPlayers(roomId);
+    const meta = await this.redis.getRoomMeta(roomId);
+    const createdAt = meta.createdAt;
+    const solo = meta.solo;
     const state = { roomId, solo, players, createdAt };
     this.server.to(roomId).emit('room:state', state as any);
     // If it's a solo room and no human players remain, stop the engine
@@ -245,32 +234,24 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     // Scan all rooms for the disconnected player.
     // Note: In a larger-scale application, a more direct mapping like
     // a user ID to room ID lookup would be more efficient than scanning.
-    const roomKeys = await this.redis.client.keys('room:*:players');
+    const roomKeys = await this.redis.listRoomPlayerKeys();
     for (const key of roomKeys) {
-      const members = await this.redis.client.smembers(key);
-      const playerToRemove = members.find((p) => {
-        try {
-          const player = JSON.parse(p) as { id: number; bot?: boolean };
-          // Do not remove bots on disconnect, only human players
-          return !player.bot && player.id === userId;
-        } catch {
-          return false;
-        }
-      });
+      const members = await this.redis.getPlayersByKey(key);
+      const playerToRemove = members.find((p) => !p.bot && p.id === userId);
 
       if (playerToRemove) {
-        const roomId = key.split(':')[1];
-        await this.redis.client.srem(key, playerToRemove);
+        const roomId = this.redis.getRoomIdFromPlayersKey(key) || '';
+        if (!roomId) continue;
+        await this.redis.removePlayerByKey(key, userId);
 
         // Notify the remaining players in the room about the updated state.
-        const remaining = await this.redis.client.smembers(key);
-        const players = remaining.map((p) => JSON.parse(p));
-        const meta = await this.redis.client.hgetall(`room:${roomId}:meta`);
+        const players = await this.redis.getPlayers(roomId);
+        const meta = await this.redis.getRoomMeta(roomId);
         const state = {
           roomId,
-          solo: meta.solo === '1',
+          solo: meta.solo,
           players,
-          createdAt: Number(meta.createdAt),
+          createdAt: meta.createdAt,
         };
         this.server.to(roomId).emit('room:state', state as any);
         // If it's a solo room and no human players remain, stop the engine
@@ -284,5 +265,3 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
   }
 }
-
-

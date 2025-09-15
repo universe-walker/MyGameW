@@ -813,12 +813,7 @@ export class BotEngineService {
     const rr = this.rooms.get(roomId);
     if (!rr) return;
     if (rr.order && typeof rr.pickerIndex === 'number') return;
-    const raw = await this.redis.client.smembers(`room:${roomId}:players`);
-    const players = raw
-      .map((m) => {
-        try { return JSON.parse(m) as { id: number; bot?: boolean }; } catch { return null; }
-      })
-      .filter((x): x is { id: number; bot?: boolean } => !!x);
+    const players = await this.redis.getPlayers(roomId);
     const humans = players.filter((p) => !p.bot);
     const bots = players.filter((p) => p.bot);
     const order = [...humans, ...bots].map((p) => p.id);
@@ -900,7 +895,27 @@ export class BotEngineService {
     const pKnow = this.estimateKnow(profile, category);
     const pAns = this.answerProbability(pKnow, value, profile.riskProfile);
     this.timers.set(roomId, `bot_answer_${botPlayerId}`, thinkMs, () => {
-      const correct = this.rand() < Math.max(0.1, pKnow * (1 - profile.mistakeRate)) && this.rand() < pAns;
+      // Decision: answer or pass based on boosted attempt probability
+      const rawBoost = Number(process.env.BOT_ATTEMPT_BOOST);
+      const boost = Number.isFinite(rawBoost) ? rawBoost : 1.35;
+      const floorByRisk: Record<string, number> = { low: 0.1, mid: 0.2, high: 0.3 };
+      const attemptFloor = floorByRisk[profile.riskProfile] ?? 0.2;
+      const attemptProb = Math.max(0, Math.min(1, pAns * boost + attemptFloor));
+      if (this.rand() >= attemptProb) {
+        // Pass without penalty; advance to next answerer
+        this.emitBotStatus(roomId, botPlayerId, 'passed');
+        // Do NOT set lastAnswerCorrect so scoring won't change
+        this.goto(roomId, 'score_apply', Date.now() + this.SCORE_APPLY_MS);
+        this.timers.set(roomId, 'phase_score_apply', this.SCORE_APPLY_MS, () => this.advanceAfterScore(roomId));
+        return;
+      }
+
+      // Attempt an answer: correctness depends on knowledge with a modest floor
+      const correctFloor = Number.isFinite(Number(process.env.BOT_CORRECT_FLOOR))
+        ? Number(process.env.BOT_CORRECT_FLOOR)
+        : 0.2;
+      const pCorrect = Math.max(correctFloor, pKnow * (1 - profile.mistakeRate));
+      const correct = this.rand() < pCorrect;
       this.emitBotStatus(roomId, botPlayerId, 'answering');
       const rr2 = this.rooms.get(roomId);
       if (rr2) rr2.lastAnswerCorrect = correct;

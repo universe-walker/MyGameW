@@ -214,13 +214,12 @@ class TelemetryMock { soloStarted() {}; botAnswer() {} }
 
 class RedisMock {
   private playersByRoom = new Map<string, any[]>();
-  client = {
-    smembers: async (key: string) => {
-      const roomId = key.split(':')[1];
-      return (this.playersByRoom.get(roomId) || []).map((p) => JSON.stringify(p));
-    },
-    hgetall: async (_key: string) => ({ createdAt: String(Date.now()), solo: '1' }),
-  } as any;
+  async getPlayers(roomId: string) {
+    return this.playersByRoom.get(roomId) || [];
+  }
+  async getRoomMeta(_roomId: string) {
+    return { createdAt: Date.now(), solo: true, botCount: 0 };
+  }
   setPlayers(roomId: string, players: any[]) { this.playersByRoom.set(roomId, players); }
 }
 

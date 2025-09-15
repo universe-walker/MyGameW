@@ -28,7 +28,7 @@ function createServiceWithAnswer(answer: string) {
     roomSuperCell: { findMany: async () => [] },
   } as any;
 
-  const redis = { client: { smembers: async () => [] } } as any;
+  const redis = { getPlayers: async () => [] } as any;
 
   const svc = new BotEngineService(timerSvc, profiles, telemetry, prisma, redis);
 
