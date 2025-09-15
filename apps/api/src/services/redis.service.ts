@@ -12,6 +12,9 @@ type RoomMeta = {
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   client!: Redis;
   private prefix = process.env.REDIS_PREFIX ?? '';
+  private roomTTLSeconds = Number.isFinite(Number(process.env.ROOM_TTL_SECONDS))
+    ? Number(process.env.ROOM_TTL_SECONDS)
+    : 60 * 60 * 24 * 2; // 2 days by default
 
   onModuleInit() {
     const url = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -80,7 +83,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async removePlayer(roomId: string, playerId: number) {
-    await this.client.hdel(this.keyRoomPlayers(roomId), String(playerId));
+    const key = this.keyRoomPlayers(roomId);
+    const type = await this.client.type(key);
+    if (type === 'hash') {
+      await this.client.hdel(key, String(playerId));
+      return;
+    }
+    if (type === 'set') {
+      const members = await this.client.smembers(key);
+      const toRemove = members.find((m) => {
+        try { const p = JSON.parse(m) as TRoomPlayer; return p.id === playerId; } catch { return false; }
+      });
+      if (toRemove) await this.client.srem(key, toRemove);
+    }
   }
 
   async getPlayers(roomId: string): Promise<TRoomPlayer[]> {
@@ -196,6 +211,29 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.del(key);
     for (const [field, value] of entries) pipeline.hset(key, field, value);
     await pipeline.exec();
+  }
+
+  // TTL helpers
+  async touchRoom(roomId: string) {
+    const ttl = this.roomTTLSeconds;
+    const pipe = this.client.pipeline();
+    pipe.expire(this.keyRoomMeta(roomId), ttl);
+    pipe.expire(this.keyRoomPlayers(roomId), ttl);
+    await pipe.exec();
+  }
+
+  async deleteRoomIfEmpty(roomId: string): Promise<boolean> {
+    const key = this.keyRoomPlayers(roomId);
+    const type = await this.client.type(key);
+    let count = 0;
+    if (type === 'hash') count = await this.client.hlen(key);
+    else if (type === 'set') count = await this.client.scard(key);
+    if (count > 0) return false;
+    const pipe = this.client.pipeline();
+    pipe.del(this.keyRoomMeta(roomId));
+    pipe.del(key);
+    await pipe.exec();
+    return true;
   }
 }
 

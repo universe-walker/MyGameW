@@ -39,6 +39,7 @@ export class RoomsController {
     }
     const now = Date.now();
     await this.redis.setRoomMeta(id, { createdAt: now, solo: true, botCount });
+    await this.redis.touchRoom(id);
     // Seed bots into players set (IDs use negative numbers to avoid collision with real users)
     const bots: TRoomPlayer[] = Array.from({ length: botCount }).map((_, i) => ({
       id: -1 - i,
@@ -46,6 +47,7 @@ export class RoomsController {
       bot: true,
     }));
     if (bots.length) await this.redis.addPlayers(id, bots);
+    await this.redis.touchRoom(id);
     return ZRoomsCreateRes.parse({ roomId: id });
   }
 }

@@ -71,6 +71,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const roomId = crypto.randomUUID();
     const now = Date.now();
     await this.redis.setRoomMeta(roomId, { createdAt: now, solo: false, botCount: 0 });
+    await this.redis.touchRoom(roomId);
     const state = { roomId, solo: false, players: [], createdAt: now };
     client.emit('room:state', state as any);
   }
@@ -88,6 +89,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
     const player: TRoomPlayer = user ? { id: user.id, name: user.first_name || 'User' } : { id: 0, name: 'Anon' };
     await this.redis.addPlayer(roomId, player);
+    await this.redis.touchRoom(roomId);
     const players = await this.redis.getPlayers(roomId);
     const meta = await this.redis.getRoomMeta(roomId);
     const createdAt = meta.createdAt;
@@ -116,6 +118,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     await this.redis.removePlayer(roomId, playerId);
     await client.leave(roomId);
     // Emit updated room state to remaining clients
+    await this.redis.touchRoom(roomId);
     const players = await this.redis.getPlayers(roomId);
     const meta = await this.redis.getRoomMeta(roomId);
     const createdAt = meta.createdAt;
@@ -129,6 +132,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         this.engine.stop(roomId);
       }
     }
+    await this.redis.deleteRoomIfEmpty(roomId);
   }
 
   @SubscribeMessage('solo:pause')
@@ -227,41 +231,23 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   async handleDisconnect(client: Socket) {
     const user = (client as any).data?.user as { id: number } | undefined;
-    // On disconnect, we need to find which room the user was in and remove them.
-    // This is important for preventing users from being stuck in a room across sessions.
+    // Remove user from all rooms they were joined to (no global SCAN/KEYS)
     const userId = user?.id ?? 0; // 0 for Anon players in dev
-
-    // Scan all rooms for the disconnected player.
-    // Note: In a larger-scale application, a more direct mapping like
-    // a user ID to room ID lookup would be more efficient than scanning.
-    const roomKeys = await this.redis.listRoomPlayerKeys();
-    for (const key of roomKeys) {
-      const members = await this.redis.getPlayersByKey(key);
-      const playerToRemove = members.find((p) => !p.bot && p.id === userId);
-
-      if (playerToRemove) {
-        const roomId = this.redis.getRoomIdFromPlayersKey(key) || '';
-        if (!roomId) continue;
-        await this.redis.removePlayerByKey(key, userId);
-
-        // Notify the remaining players in the room about the updated state.
-        const players = await this.redis.getPlayers(roomId);
-        const meta = await this.redis.getRoomMeta(roomId);
-        const state = {
-          roomId,
-          solo: meta.solo,
-          players,
-          createdAt: meta.createdAt,
-        };
-        this.server.to(roomId).emit('room:state', state as any);
-        // If it's a solo room and no human players remain, stop the engine
-        if (state.solo) {
-          const hasHuman = players.some((p: { bot?: boolean }) => !p.bot);
-          if (!hasHuman && this.engine.isRunning(roomId)) {
-            this.engine.stop(roomId);
-          }
+    const rooms = Array.from(client.rooms).filter((r) => r !== client.id);
+    for (const roomId of rooms) {
+      await this.redis.removePlayer(roomId, userId);
+      await this.redis.touchRoom(roomId);
+      const players = await this.redis.getPlayers(roomId);
+      const meta = await this.redis.getRoomMeta(roomId);
+      const state = { roomId, solo: meta.solo, players, createdAt: meta.createdAt };
+      this.server.to(roomId).emit('room:state', state as any);
+      if (state.solo) {
+        const hasHuman = players.some((p: { bot?: boolean }) => !p.bot);
+        if (!hasHuman && this.engine.isRunning(roomId)) {
+          this.engine.stop(roomId);
         }
       }
+      await this.redis.deleteRoomIfEmpty(roomId);
     }
   }
 }
