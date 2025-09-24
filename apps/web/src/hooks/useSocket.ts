@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Socket, TRoomState, TGamePhaseEvent, TBotStatus, TBoardState } from '@mygame/shared';
+import type { Socket, TRoomState, TGamePhaseEvent, TBotStatus, TBoardState, TRoomLobby } from '@mygame/shared';
 import { getInitDataRaw, getUser } from '../lib/telegram';
 import { connectSocket, disconnectSocket, getSocket } from '../lib/socket';
 import { useGameStore } from '../state/store';
@@ -7,6 +7,8 @@ import { useGameStore } from '../state/store';
 function setupSocketListeners(
   socket: Socket,
   setRoom: any,
+  setMode: (m: 'solo' | 'multi') => void,
+  setLobby: (active: boolean, info?: { minHumans?: number; until?: number }) => void,
   setPhase: any,
   setBotStatus: any,
   setBoard: any,
@@ -19,11 +21,26 @@ function setupSocketListeners(
   console.log('[socket] setupSocketListeners: attaching listeners');
   socket.off('room:state');
   socket.off('game:phase');
+  socket.off('room:join_denied');
+  socket.off('room:lobby');
+  socket.off('game:modeChanged');
   socket.off('bot:status');
   socket.off('board:state');
   socket.on('room:state', (state: TRoomState) => {
     console.log('[socket] event room:state', state);
-    setRoom(state.roomId, state.players, Boolean(state.solo));
+    setRoom(state.roomId, state.players);
+    setMode(state.solo ? 'solo' : 'multi');
+    setLobby(false);
+  });
+  socket.on('room:lobby', (payload: TRoomLobby) => {
+    console.log('[socket] event room:lobby', payload);
+    setLobby(true, { minHumans: payload.minHumans, until: payload.until });
+  });
+  socket.on('game:modeChanged', (p: any) => {
+    console.log('[socket] event game:modeChanged', p);
+    if (p && (p.mode === 'solo' || p.mode === 'multi')) setMode(p.mode);
+    // Clear lobby and any local timers when mode changes
+    setLobby(false);
   });
   socket.on('game:phase', (p: TGamePhaseEvent) => {
     console.log('[socket] event game:phase', p);
@@ -35,6 +52,9 @@ function setupSocketListeners(
       setMask(null, 0);
       setCanRevealHint(false);
     }
+  });
+  socket.on('room:join_denied', (payload: any) => {
+    console.warn('[socket] event room:join_denied', payload);
   });
   socket.on('bot:status', (b: TBotStatus) => {
     console.log('[socket] event bot:status', b);
@@ -98,6 +118,8 @@ function setupSocketListeners(
 
 export function useSocket() {
   const setRoom = useGameStore((s) => s.setRoom);
+  const setMode = useGameStore((s) => s.setMode);
+  const setLobby = useGameStore((s) => s.setLobby);
   const setPhase = useGameStore((s) => s.setPhase);
   const setBoard = useGameStore((s) => s.setBoard);
   const setBotStatus = useGameStore((s) => s.setBotStatus);
@@ -114,10 +136,10 @@ export function useSocket() {
       const user = getUser();
       console.log('[ui] connecting socket, hasUser=', Boolean(user), 'initDataRaw.length=', initDataRaw.length);
       socket = connectSocket(initDataRaw);
-      setupSocketListeners(socket, setRoom, setPhase, setBotStatus, setBoard, setReveal, setMask, setCanRevealHint, setHintError, onNearMiss);
+      setupSocketListeners(socket, setRoom, setMode, setLobby, setPhase, setBotStatus, setBoard, setReveal, setMask, setCanRevealHint, setHintError, onNearMiss);
     }
     return socket;
-  }, [setRoom, setPhase, setBotStatus, setBoard]);
+  }, [setRoom, setMode, setLobby, setPhase, setBotStatus, setBoard]);
 
   const disconnect = useCallback(() => {
     disconnectSocket();

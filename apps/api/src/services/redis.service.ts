@@ -6,6 +6,8 @@ type RoomMeta = {
   createdAt: number;
   solo: boolean;
   botCount: number;
+  minHumans?: number;
+  autoBots?: number;
 };
 
 @Injectable()
@@ -87,6 +89,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (typeof meta.createdAt === 'number') data.createdAt = String(meta.createdAt);
     if (typeof meta.solo === 'boolean') data.solo = meta.solo ? '1' : '0';
     if (typeof meta.botCount === 'number') data.botCount = String(meta.botCount);
+    if (typeof meta.minHumans === 'number') data.minHumans = String(meta.minHumans);
+    if (typeof meta.autoBots === 'number') data.autoBots = String(meta.autoBots);
     if (Object.keys(data).length) {
       await this.withTimeout(this.client.hset(this.keyRoomMeta(roomId), data), 'hset room:meta');
     }
@@ -98,6 +102,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       createdAt: raw.createdAt ? Number(raw.createdAt) : Date.now(),
       solo: raw.solo === '1',
       botCount: raw.botCount ? Number(raw.botCount) : 0,
+      minHumans: raw.minHumans ? Number(raw.minHumans) : undefined,
+      autoBots: raw.autoBots ? Number(raw.autoBots) : undefined,
     };
   }
 

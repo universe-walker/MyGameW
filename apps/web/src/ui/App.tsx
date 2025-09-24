@@ -13,7 +13,7 @@ import AchievementsModal from './AchievementsModal';
 export function App() {
   const [verified, setVerified] = useState(false);
   const roomId = useGameStore((s) => s.roomId);
-  const solo = useGameStore((s) => s.solo);
+  const mode = useGameStore((s) => s.mode);
   const leaveRoom = useGameStore((s) => s.leaveRoom);
   const setPaused = useGameStore((s) => s.setPaused);
   const { shopOpen, achievementsOpen, openShop, closeShop, openAchievements, closeAchievements } = useUiHome();
@@ -173,7 +173,7 @@ export function App() {
   return (
     <div className="min-h-full flex flex-col p-4">
       {/* AppBar (hidden for solo game page) */}
-      {!(roomId && solo) && (
+      {!(roomId && mode === 'solo') && (
         <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xl font-bold text-center sm:text-left">MyGame</div>
           <div className="w-full sm:w-auto flex flex-wrap items-center justify-center sm:justify-end gap-2">

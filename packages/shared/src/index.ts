@@ -61,6 +61,12 @@ export const ZRoomState = z.object({
   players: z.array(ZRoomPlayer),
   createdAt: z.number().int(),
 });
+export const ZRoomLobby = z.object({
+  roomId: z.string().uuid(),
+  players: z.array(ZRoomPlayer),
+  minHumans: z.number().int().min(1),
+  until: z.number().int().optional(),
+});
 export const ZBotHint = z.object({ playerId: z.number().int(), action: z.enum(['buzz', 'answer', 'pass']) });
 
 export type TInitVerifyReq = z.infer<typeof ZInitVerifyReq>;
@@ -82,6 +88,7 @@ export type TWordReveal = z.infer<typeof ZWordReveal>;
 export type THintRevealReq = z.infer<typeof ZHintRevealReq>;
 export type TRoomPlayer = z.infer<typeof ZRoomPlayer>;
 export type TRoomState = z.infer<typeof ZRoomState>;
+export type TRoomLobby = z.infer<typeof ZRoomLobby>;
 
 // Solo game phases and bot statuses
 export const ZGamePhase = z.enum([
@@ -172,7 +179,10 @@ export type TSocketClientToServerEvents = {
 
 export type TSocketServerToClientEvents = {
   'room:state': (state: TRoomState) => void;
+  'room:join_denied': (payload: { roomId: string; reason: 'mid_round' | string }) => void;
+  'room:lobby': (payload: TRoomLobby) => void;
   'game:phase': (payload: TGamePhaseEvent) => void;
+  'game:modeChanged': (payload: { roomId: string; mode: 'solo' | 'multi' }) => void;
   'bot:status': (payload: TBotStatus) => void;
   'board:state': (payload: TBoardState) => void;
   // Masked word for current question (for UI placeholders)

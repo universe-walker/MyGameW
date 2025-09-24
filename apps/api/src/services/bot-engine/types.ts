@@ -9,8 +9,11 @@ export type Phase =
   | 'round_end'
   | 'final';
 
+export type GameMode = 'solo' | 'multi';
+
 export type RoomRuntime = {
   running: boolean;
+  mode: GameMode;
   phase: Phase;
   until?: number;
   activePlayerId?: number | null;
@@ -42,4 +45,6 @@ export type RoomRuntime = {
   answerText?: string;
   currentMask?: string;
   hintUsage?: Map<number, { used: number; revealed: Set<number> }>;
+  // internal observability helpers
+  rosterHash?: string;
 };

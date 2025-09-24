@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../services/prisma.service';
 import { RedisService } from '../services/redis.service';
 import { ZRoomsCreateRes } from '@mygame/shared';
@@ -12,7 +12,7 @@ export class RoomsController {
   constructor(private prisma: PrismaService, private redis: RedisService) {}
 
   @Post()
-  async create() {
+  async create(@Body() body?: any) {
     const id = randomUUID();
     try {
       await this.prisma.room.create({ data: { id } });
@@ -22,7 +22,9 @@ export class RoomsController {
       console.warn('[rooms.create] prisma.room.create failed; continuing with Redis-only room. Error:', e);
     }
     const now = Date.now();
-    await this.redis.setRoomMeta(id, { createdAt: now });
+    const minHumans = Number.isFinite(Number(body?.minHumans)) ? Number(body.minHumans) : undefined;
+    const autoBots = Number.isFinite(Number(body?.autoBots)) ? Number(body.autoBots) : undefined;
+    await this.redis.setRoomMeta(id, { createdAt: now, solo: false, botCount: 0, minHumans, autoBots });
     return ZRoomsCreateRes.parse({ roomId: id });
   }
 

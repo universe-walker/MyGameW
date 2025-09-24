@@ -5,9 +5,13 @@ export class BotEngineConfig {
   readonly answerWaitBotMs: number;
   readonly scoreApplyMs: number;
   readonly soloAllowPause: boolean;
+  readonly multiAllowPause: boolean;
   readonly revealMs: number;
   readonly superWaitMs: number;
   readonly debugAnswer: boolean;
+  // Multiplayer defaults
+  readonly defaultMinHumans: number;
+  readonly defaultAutoBots: number;
   readonly blitzEnabled: boolean;
   readonly blitzRounds: number[];
   readonly blitzCellsPerRound: number;
@@ -28,9 +32,12 @@ export class BotEngineConfig {
     this.answerWaitBotMs = this.int('ANSWER_WAIT_BOT_MS', botFallback);
     this.scoreApplyMs = this.int('SCORE_APPLY_MS', 1000);
     this.soloAllowPause = this.bool('SOLO_ALLOW_PAUSE', true);
+    this.multiAllowPause = this.bool('MULTI_ALLOW_PAUSE', false);
     this.revealMs = this.int('REVEAL_MS', 2500);
     this.superWaitMs = this.int('SUPER_WAIT_MS', 12000);
     this.debugAnswer = this.bool('DEBUG_ANSWER', false);
+    this.defaultMinHumans = this.int('DEFAULT_MIN_HUMANS', 3);
+    this.defaultAutoBots = this.int('DEFAULT_AUTO_BOTS', 0);
     this.blitzEnabled = this.bool('BLITZ_ENABLED', true);
     this.blitzRounds = String(this.env.BLITZ_ROUNDS || '2')
       .split(',')

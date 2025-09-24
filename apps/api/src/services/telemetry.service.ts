@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class TelemetryService {
-  soloStarted(roomId: string) {
+  matchStarted(roomId: string, mode: 'solo' | 'multi') {
     // Replace with real metrics later
     // eslint-disable-next-line no-console
-    console.log('[telemetry] solo_started', { roomId });
+    console.log('[telemetry] match_started', { roomId, mode });
+  }
+  matchCompleted(roomId: string, mode: 'solo' | 'multi') {
+    // eslint-disable-next-line no-console
+    console.log('[telemetry] match_completed', { roomId, mode });
   }
   botBuzz(roomId: string, playerId: number) {
     // eslint-disable-next-line no-console

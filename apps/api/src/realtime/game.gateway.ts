@@ -70,7 +70,10 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async onRoomsCreate(@ConnectedSocket() client: Socket) {
     const roomId = crypto.randomUUID();
     const now = Date.now();
-    await this.redis.setRoomMeta(roomId, { createdAt: now, solo: false, botCount: 0 });
+    // Default meta for multiplayer rooms
+    const minHumans = Number(process.env.DEFAULT_MIN_HUMANS || 3);
+    const autoBots = Number(process.env.DEFAULT_AUTO_BOTS || 0);
+    await this.redis.setRoomMeta(roomId, { createdAt: now, solo: false, botCount: 0, minHumans, autoBots });
     await this.redis.touchRoom(roomId);
     const state = { roomId, solo: false, players: [], createdAt: now };
     client.emit('room:state', state as any);
@@ -85,9 +88,24 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       return;
     }
     const { roomId } = parsed.data;
-    await client.join(roomId);
     const user = (client as any).data?.user as { id: number; first_name?: string } | undefined;
     const player: TRoomPlayer = user ? { id: user.id, name: user.first_name || 'User' } : { id: 0, name: 'Anon' };
+
+    // Enforce: no mid-round joins (except reconnection of existing player)
+    const runtime = this.engine.rooms.get(roomId);
+    if (runtime?.running) {
+      const playersNow = await this.redis.getPlayers(roomId);
+      const already = playersNow.some((p) => p.id === player.id);
+      const allowedPhase = runtime.phase === 'prepare';
+      if (!already && !allowedPhase) {
+        try {
+          client.emit('room:join_denied', { roomId, reason: 'mid_round' } as any);
+        } catch {}
+        return;
+      }
+    }
+
+    await client.join(roomId);
     await this.redis.addPlayer(roomId, player);
     await this.redis.touchRoom(roomId);
     const players = await this.redis.getPlayers(roomId);
@@ -96,8 +114,32 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const solo = meta.solo;
     const state = { roomId, solo, players, createdAt };
     this.server.to(roomId).emit('room:state', state as any);
+
+    // Update engine mode and roster after join
+    this.engine.updateMode(roomId, meta);
+    if (this.engine.isRunning(roomId)) await this.engine.syncRoster(roomId);
+
     if (solo && !this.engine.isRunning(roomId)) {
-      this.engine.start(roomId);
+      this.engine.start(roomId, 'solo');
+    } else if (!solo && !this.engine.isRunning(roomId)) {
+      const humans = players.filter((p) => !p.bot);
+      const threshold = Number.isFinite(Number(meta.minHumans)) && Number(meta.minHumans) > 0
+        ? Number(meta.minHumans)
+        : this.engine.config.defaultMinHumans;
+      if (humans.length >= threshold) {
+        this.engine.start(roomId, 'multi');
+      } else {
+        // Emit lobby state so clients can show waiting room until start
+        try {
+          this.server.to(roomId).emit('room:lobby', {
+            roomId,
+            players,
+            minHumans: threshold,
+          } as any);
+        } catch (e) {
+          void e;
+        }
+      }
     }
     // Publish current board state to the newly joined client(s)
     await this.engine.publishBoardState(roomId);
@@ -125,6 +167,10 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const solo = meta.solo;
     const state = { roomId, solo, players, createdAt };
     this.server.to(roomId).emit('room:state', state as any);
+
+    // Sync roster after a leave (force rebuild)
+    this.engine.updateMode(roomId, meta);
+    if (this.engine.isRunning(roomId)) await this.engine.syncRoster(roomId, { forceRebuild: true });
     // If it's a solo room and no human players remain, stop the engine
     if (solo) {
       const hasHuman = players.some((p) => !p.bot);
@@ -144,6 +190,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       console.warn('[ws] invalid payload for solo:pause', payload);
       return;
     }
+    // Pause allowed only for solo mode
     this.engine.pause(parsed.data.roomId);
   }
 
@@ -156,6 +203,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       console.warn('[ws] invalid payload for solo:resume', payload);
       return;
     }
+    // Resume allowed only for solo mode
     this.engine.resume(parsed.data.roomId);
   }
 
@@ -241,12 +289,14 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       const meta = await this.redis.getRoomMeta(roomId);
       const state = { roomId, solo: meta.solo, players, createdAt: meta.createdAt };
       this.server.to(roomId).emit('room:state', state as any);
-      if (state.solo) {
+      this.engine.updateMode(roomId, meta);
+      if (meta.solo) {
         const hasHuman = players.some((p: { bot?: boolean }) => !p.bot);
         if (!hasHuman && this.engine.isRunning(roomId)) {
           this.engine.stop(roomId);
         }
       }
+      if (this.engine.isRunning(roomId)) await this.engine.syncRoster(roomId, { forceRebuild: true });
       await this.redis.deleteRoomIfEmpty(roomId);
     }
   }

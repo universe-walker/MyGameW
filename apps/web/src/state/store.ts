@@ -14,7 +14,7 @@ export type CurrentQuestion = { category: string; value: number; prompt: string;
 
 type State = {
   roomId: string | null;
-  solo: boolean;
+  mode: 'solo' | 'multi' | null;
   players: Player[];
   phase: Phase;
   mode?: 'normal' | 'blitz';
@@ -39,7 +39,13 @@ type State = {
   paused: boolean;
   pauseOffsetMs: number; // accumulated paused duration for current phase
   pauseStartedAt: number | null; // when current pause began
-  setRoom: (id: string, players: Player[], solo?: boolean) => void;
+  // Lobby state
+  lobby: boolean;
+  lobbyMinHumans?: number;
+  lobbyUntil?: number;
+  setRoom: (id: string, players: Player[]) => void;
+  setMode: (mode: 'solo' | 'multi') => void;
+  setLobby: (active: boolean, info?: { minHumans?: number; until?: number }) => void;
   setPhase: (
     phase: Phase,
     until?: number,
@@ -61,7 +67,7 @@ type State = {
 
 export const useGameStore = create<State>((set) => ({
   roomId: null,
-  solo: false,
+  mode: null,
   players: [],
   phase: 'idle',
   until: undefined,
@@ -80,7 +86,16 @@ export const useGameStore = create<State>((set) => ({
   paused: false,
   pauseOffsetMs: 0,
   pauseStartedAt: null,
-  setRoom: (id, players, solo = false) => set({ roomId: id, players, solo }),
+  lobby: false,
+  lobbyMinHumans: undefined,
+  lobbyUntil: undefined,
+  setRoom: (id, players) => set({ roomId: id, players }),
+  setMode: (mode) => set({ mode }),
+  setLobby: (active, info) => set({
+    lobby: active,
+    lobbyMinHumans: info?.minHumans,
+    lobbyUntil: info?.until,
+  }),
   setPhase: (phase, until, activePlayerId, question, scores, extras) =>
     set((s) => ({
       phase,
@@ -116,7 +131,7 @@ export const useGameStore = create<State>((set) => ({
       return { paused: false, pauseStartedAt: null, pauseOffsetMs: s.pauseOffsetMs + delta } as Partial<State> as State;
     }),
   leaveRoom: () =>
-    set({ roomId: null, solo: false, players: [], phase: 'idle', until: undefined, activePlayerId: null, botStatuses: {}, boardCategories: [], question: undefined, scores: {}, revealAnswer: null, answerMask: null, answerLen: 0, nearMissAt: null, canRevealHint: false, hintErrorMsg: null, hintErrorAt: null, paused: false, pauseOffsetMs: 0, pauseStartedAt: null }),
+    set({ roomId: null, mode: null, players: [], phase: 'idle', until: undefined, activePlayerId: null, botStatuses: {}, boardCategories: [], question: undefined, scores: {}, revealAnswer: null, answerMask: null, answerLen: 0, nearMissAt: null, canRevealHint: false, hintErrorMsg: null, hintErrorAt: null, paused: false, pauseOffsetMs: 0, pauseStartedAt: null, lobby: false, lobbyMinHumans: undefined, lobbyUntil: undefined }),
 }));
 
 

@@ -1,10 +1,11 @@
 import type { BotEngineService } from '../bot-engine.service';
 import { createInitialRoomRuntime } from './runtime';
+import type { GameMode } from './types';
 
-export function startGame(engine: BotEngineService, roomId: string): void {
+export function startGame(engine: BotEngineService, roomId: string, mode: GameMode): void {
   if (engine.isRunning(roomId)) return;
 
-  const runtime = createInitialRoomRuntime();
+  const runtime = createInitialRoomRuntime(mode);
   engine.rooms.set(roomId, runtime);
 
   void ensureSession(engine, roomId)
@@ -12,7 +13,7 @@ export function startGame(engine: BotEngineService, roomId: string): void {
     .then(() => engine.emitBoardState(roomId));
 
   void engine.schedulePrepare(roomId);
-  engine.telemetry.soloStarted(roomId);
+  engine.telemetry.matchStarted(roomId, mode);
 }
 
 export function stopGame(engine: BotEngineService, roomId: string): void {
@@ -34,15 +35,22 @@ export function stopGame(engine: BotEngineService, roomId: string): void {
   engine.rooms.delete(roomId);
   engine.botPlayerIds.delete(roomId);
   engine.nextBotId.delete(roomId);
+  engine.telemetry.matchCompleted(roomId, runtime.mode);
 }
 
 export function pauseGame(engine: BotEngineService, roomId: string): void {
-  if (!engine.config.soloAllowPause) return;
+  const runtime = engine.rooms.get(roomId);
+  if (!runtime) return;
+  const allowed = runtime.mode === 'solo' ? engine.config.soloAllowPause : engine.config.multiAllowPause;
+  if (!allowed) return;
   engine.timers.pause(roomId);
 }
 
 export function resumeGame(engine: BotEngineService, roomId: string): void {
-  if (!engine.config.soloAllowPause) return;
+  const runtime = engine.rooms.get(roomId);
+  if (!runtime) return;
+  const allowed = runtime.mode === 'solo' ? engine.config.soloAllowPause : engine.config.multiAllowPause;
+  if (!allowed) return;
   engine.timers.resume(roomId);
 }
 

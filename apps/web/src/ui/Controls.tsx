@@ -9,12 +9,12 @@ export type ControlsProps = {
   onResume?: () => void;
   onLeave: () => void;
   isMyTurnToAnswer: boolean;
-  solo: boolean;
+  mode?: 'solo' | 'multi' | null;
   paused?: boolean;
   showMeta?: boolean;
 };
 
-export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, solo, paused = false, showMeta = true }: ControlsProps) {
+export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, mode, paused = false, showMeta = true }: ControlsProps) {
   const mask = useGameStore((s) => s.answerMask);
   const nearMissAt = useGameStore((s) => s.nearMissAt);
   const roomId = useGameStore((s) => s.roomId);
@@ -220,7 +220,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           </div>
         </div>
       )}
-      {showMeta && solo && !paused && (
+      {showMeta && mode === 'solo' && !paused && (
         <button
           onClick={onPause}
           className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
@@ -228,7 +228,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
           Пауза
         </button>
       )}
-      {showMeta && solo && paused && (
+      {showMeta && mode === 'solo' && paused && (
         <button
           onClick={onResume}
           className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"

@@ -5,6 +5,7 @@ import { QuestionPrompt } from './QuestionPrompt';
 import { Controls } from './Controls';
 import { Scoreboard } from './Scoreboard';
 import { getUser } from '../lib/telegram';
+import { getSocket } from '../lib/socket';
 import GameOverModal from './GameOverModal';
 
 type Props = {
@@ -16,8 +17,10 @@ type Props = {
 
 export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const roomId = useGameStore((s) => s.roomId);
-  const solo = useGameStore((s) => s.solo);
+  const mode = useGameStore((s) => s.mode);
   const players = useGameStore((s) => s.players);
+  const lobby = useGameStore((s) => s.lobby);
+  const lobbyMinHumans = useGameStore((s) => s.lobbyMinHumans);
   const phase = useGameStore((s) => s.phase);
   const until = useGameStore((s) => s.until);
   const activePlayerId = useGameStore((s) => s.activePlayerId ?? null);
@@ -47,7 +50,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
   // Effective dynamic offset: includes store pause and local overlay pause (for non-solo)
   const baseOffset = pauseStartedAt && paused ? pauseOffsetMs + (now - pauseStartedAt) : pauseOffsetMs;
-  const overlayExtraOffset = solo && soloPausedByOverlayRef.current
+  const overlayExtraOffset = mode === 'solo' && soloPausedByOverlayRef.current
     ? 0 // in solo, real pause already reflected by store pause bookkeeping
     : overlayAccMsRef.current + (overlayActive && overlayStartedAtRef.current ? now - overlayStartedAtRef.current : 0);
   const dynamicOffset = baseOffset + overlayExtraOffset;
@@ -76,7 +79,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const isMyTurnToAnswer = phase === 'answer_wait' && activePlayerId === myId;
   const hasOptions = Array.isArray(question?.options) && (question?.options?.length ?? 0) > 0;
   const canPick = phase === 'prepare' && activePlayerId === myId;
-  const showBoard = phase === 'prepare';
+  const showBoard = phase === 'prepare' && !lobby;
 
   // Keep layout stable between phases: remember board height and reuse it
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
@@ -160,7 +163,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     setOverlayActive(true);
     overlayStartedAtRef.current = Date.now();
     // Pause the world: in solo ask the server to pause too
-    if (solo && onPause && !paused) {
+    if (mode === 'solo' && onPause && !paused) {
       try {
         onPause();
         soloPausedByOverlayRef.current = true;
@@ -179,7 +182,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         // Now hide overlay
         setOverlayActive(false);
         // Resume solo if we paused it
-        if (solo && soloPausedByOverlayRef.current && onResume) {
+        if (mode === 'solo' && soloPausedByOverlayRef.current && onResume) {
           try {
             onResume();
           } catch {}
@@ -187,7 +190,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         soloPausedByOverlayRef.current = false;
       }, fadeOutMs);
     }, holdMs);
-  }, [overlayActive, solo, onPause, onResume, paused]);
+  }, [overlayActive, mode, onPause, onResume, paused]);
 
   // Trigger overlay when entering prepare for the first time, or when board cell count increases (new round)
   useEffect(() => {
@@ -207,7 +210,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
       lastCellCountRef.current = currentCellCount;
       const next = (roundNumber || 1) + 1;
       // If solo and about to start round 3 -> show Game Over instead
-      if (solo && next >= 3) {
+      if (mode === 'solo' && next >= 3) {
         setGameOverOpen(true);
         setOverlayActive(false);
         setRoundNumber(2);
@@ -224,14 +227,32 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
   // If server signals the end of the game (final), show Game Over (solo only)
   useEffect(() => {
-    if (solo && phase === 'final') {
+    if (mode === 'solo' && phase === 'final') {
       setOverlayActive(false);
       setGameOverOpen(true);
     }
-  }, [solo, phase]);
+  }, [mode, phase]);
 
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
+      {lobby && (
+        <div className="p-3 rounded bg-blue-50 border border-blue-200">
+          <div className="font-semibold mb-1">Ожидание игроков…</div>
+          <div className="text-sm text-gray-700">Нужно людей: {lobbyMinHumans ?? 3}</div>
+          <div className="mt-2 text-sm">
+            Присоединились: {players.filter((p) => !p.bot).length}
+            {players.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {players.map((p) => (
+                  <span key={p.id} className="px-2 py-0.5 rounded bg-white border text-xs">
+                    {p.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Header: active players + timer */}
       <div className="flex items-center justify-between p-2 rounded bg-slate-100">
         <div className="flex items-center gap-2">
@@ -277,13 +298,24 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
         {/* Inline answer input under the question (no meta buttons) */}
         <div className="mt-2">
+          {mode === 'multi' && phase === 'buzzer_window' && (
+            <button
+              className="px-3 py-2 rounded bg-rose-600 text-white text-sm md:text-base"
+              onClick={() => {
+                const s = getSocket();
+                if (s && roomId) s.emit('buzzer:press', { roomId });
+              }}
+            >
+              ЖМУ!
+            </button>
+          )}
           <Controls
             onAnswer={onAnswer}
             onPause={onPause}
             onResume={onResume}
             onLeave={onLeave}
             isMyTurnToAnswer={isMyTurnToAnswer && !hasOptions}
-            solo={solo}
+            mode={mode}
             paused={paused}
             showMeta={false}
           />
@@ -297,7 +329,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         onResume={onResume}
         onLeave={onLeave}
         isMyTurnToAnswer={false}
-        solo={solo}
+        mode={mode}
         paused={paused}
       />
 
@@ -328,7 +360,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
       )}
 
       {/* Game Over for Solo after Round 2 */}
-      {solo && gameOverOpen && (
+      {mode === 'solo' && gameOverOpen && (
         <GameOverModal
           open={true}
           players={players}

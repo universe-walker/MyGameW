@@ -1,8 +1,9 @@
-import type { RoomRuntime } from './types';
+import type { RoomRuntime, GameMode } from './types';
 
-export function createInitialRoomRuntime(): RoomRuntime {
+export function createInitialRoomRuntime(mode: GameMode): RoomRuntime {
   return {
     running: true,
+    mode,
     phase: 'idle',
     until: undefined,
     activePlayerId: null,
