@@ -6,7 +6,6 @@ build/
 .env.*
 coverage/
 .vite/
-pnpm-lock.yaml
 
 
 apps/web/src/**/*.js
