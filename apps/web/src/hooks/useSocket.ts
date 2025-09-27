@@ -45,7 +45,7 @@ function setupSocketListeners(
   socket.on('game:phase', (p: TGamePhaseEvent) => {
     console.log('[socket] event game:phase', p);
     const anyp: any = p as any;
-    const extras: any = { mode: anyp.mode, blitz: anyp.blitz ? { index: anyp.blitz.index, total: anyp.blitz.total } : undefined };
+    const extras: any = { variant: anyp.mode, blitz: anyp.blitz ? { index: anyp.blitz.index, total: anyp.blitz.total } : undefined };
     setPhase(p.phase, p.until, p.activePlayerId ?? null, p.question, p.scores, extras);
     if (p.phase === 'prepare' || p.phase === 'answer_wait') setReveal(null);
     if (p.phase !== 'answer_wait') {

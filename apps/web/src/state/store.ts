@@ -17,7 +17,7 @@ type State = {
   mode: 'solo' | 'multi' | null;
   players: Player[];
   phase: Phase;
-  mode?: 'normal' | 'blitz';
+  variant?: 'normal' | 'blitz';
   blitzIndex?: number; // 1-based
   blitzTotal?: number;
   until?: number;
@@ -52,7 +52,7 @@ type State = {
     activePlayerId?: number | null,
     question?: CurrentQuestion,
     scores?: Record<string, number>,
-    extras?: { mode?: 'normal' | 'blitz'; blitz?: { index: number; total: number } },
+    extras?: { variant?: 'normal' | 'blitz'; blitz?: { index: number; total: number } },
   ) => void;
   setBoard: (categories: BoardCategory[]) => void;
   setBotStatus: (playerId: number, status: string) => void;
@@ -103,7 +103,7 @@ export const useGameStore = create<State>((set) => ({
       activePlayerId,
       question,
       scores: scores ?? s.scores,
-      mode: extras?.mode,
+      variant: extras?.variant,
       blitzIndex: extras?.blitz?.index,
       blitzTotal: extras?.blitz?.total,
       // Reset pause bookkeeping on every new phase payload
