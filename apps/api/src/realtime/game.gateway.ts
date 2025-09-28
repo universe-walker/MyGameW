@@ -42,27 +42,54 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const initDataRaw = client.handshake.auth?.initDataRaw as string | undefined;
     const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
     const allowDev = process.env.ALLOW_DEV_NO_TG === '1' || !token;
-    if (!initDataRaw || !verifyInitData(initDataRaw, token).ok) {
+    const res = initDataRaw ? verifyInitData(initDataRaw, token) : undefined;
+    try {
+      console.log('[ws] connection attempt', {
+        hasInitData: Boolean(initDataRaw),
+        initDataLen: initDataRaw?.length || 0,
+        botTokenPresent: Boolean(token),
+        allowDev,
+        signatureValid: res?.signatureValid,
+        notExpired: res?.notExpired,
+        reason: res?.ok ? 'ok' : res?.reason,
+        authDate: res?.authDate,
+        ageSeconds: res?.ageSeconds,
+        ttlSeconds: res?.ttlSeconds,
+      });
+    } catch {}
+    if (!initDataRaw || !(res?.ok)) {
       if (!allowDev) {
+        console.warn('[ws] rejecting connection', {
+          cause: !initDataRaw ? 'missing_initData' : res?.reason || 'invalid',
+        });
         client.disconnect(true);
         return;
       }
+      console.warn('[ws] invalid/missing initData but allowDev=true -> allow connection', {
+        cause: !initDataRaw ? 'missing_initData' : res?.reason || 'invalid',
+      });
       // In development, allow connection without Telegram auth
     }
     // When Telegram initData is valid (or dev override enabled), parse and store
     // the authenticated user on the socket. Never trust client-provided auth.user.
     try {
-      if (initDataRaw && verifyInitData(initDataRaw, token).ok) {
+      if (initDataRaw && res?.ok) {
         const data = parseInitData(initDataRaw);
         const userJson = data.user ? decodeURIComponent(data.user) : null;
         if (userJson) {
           const user = JSON.parse(userJson) as { id: number; username?: string; first_name?: string };
           (client as any).data = (client as any).data || {};
           (client as any).data.user = { id: user.id, username: user.username, first_name: user.first_name };
+          try {
+            console.log('[ws] authenticated socket user', { userId: user.id });
+          } catch {}
         }
       }
     } catch {
       // ignore parse errors, socket remains unauthenticated user (treated as anon in dev)
+      try {
+        console.warn('[ws] failed to parse initData user JSON');
+      } catch {}
     }
   }
 

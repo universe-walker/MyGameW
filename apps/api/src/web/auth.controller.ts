@@ -14,6 +14,19 @@ export class AuthController {
     const { initDataRaw } = parsed.data;
     const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
     const res = verifyInitData(initDataRaw, botToken);
+    try {
+      console.log('[auth] /auth/telegram/verify', {
+        initDataLen: initDataRaw?.length || 0,
+        botTokenPresent: Boolean(botToken),
+        ok: res.ok,
+        reason: res.ok ? 'ok' : res.reason,
+        signatureValid: res.signatureValid,
+        notExpired: res.notExpired,
+        authDate: res.authDate,
+        ageSeconds: res.ageSeconds,
+        ttlSeconds: res.ttlSeconds,
+      });
+    } catch {}
     if (!res.ok) throw new BadRequestException('Invalid initData');
     const data = parseInitData(initDataRaw);
     const userJson = data.user ? decodeURIComponent(data.user) : null;

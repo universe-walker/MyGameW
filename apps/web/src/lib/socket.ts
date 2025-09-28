@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import type { Socket } from '@mygame/shared';
 import { apiHostBase, apiPathPrefix } from './api';
-import { getAuthDate, TELEGRAM_INIT_DATA_TTL_SECONDS } from './telegram';
+import { getAuthDate, TELEGRAM_INIT_DATA_TTL_SECONDS, getInitDataDiagnostics } from './telegram';
 
 let socket: Socket | null = null;
 
@@ -29,6 +29,10 @@ export function connectSocket(initDataRaw: string) {
   } else {
     console.warn('[socket] initData auth_date missing');
   }
+  try {
+    const diag = getInitDataDiagnostics();
+    console.log('[socket] initData fields check', diag);
+  } catch {}
   if (socket) {
     console.log(
       '[socket] connectSocket: disconnect existing socket id=',

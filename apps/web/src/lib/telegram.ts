@@ -87,6 +87,76 @@ export function getAuthDate(): number | null {
   const value = Number(fallbackAuth);
   return Number.isFinite(value) ? value : null;
 }
+
+export function getInitDataDiagnostics() {
+  const initDataRaw = getInitDataRaw() ?? '';
+  let hasHash = false;
+  let hasAuthDate = false;
+  let hasUser = false;
+  let authDate: number | null = null;
+  let authDateIso: string | null = null;
+  let ageSeconds: number | null = null;
+  let expired: boolean | null = null;
+  let queryId: string | null = null;
+  let userId: number | null = null;
+  let userFirstName: string | null = null;
+  let userUsername: string | null = null;
+
+  try {
+    const params = new URLSearchParams(initDataRaw);
+    const hash = params.get('hash');
+    const a = params.get('auth_date');
+    const u = params.get('user');
+    queryId = params.get('query_id');
+    hasHash = Boolean(hash);
+    hasAuthDate = Boolean(a);
+    hasUser = Boolean(u);
+    if (a) {
+      const n = Number(a);
+      if (Number.isFinite(n)) {
+        authDate = n;
+        authDateIso = new Date(n * 1000).toISOString();
+        const now = Math.floor(Date.now() / 1000);
+        ageSeconds = Math.max(0, now - n);
+        expired = ageSeconds > TELEGRAM_INIT_DATA_TTL_SECONDS;
+      }
+    }
+    if (u) {
+      try {
+        const dec = decodeURIComponent(u);
+        const obj = JSON.parse(dec);
+        if (obj && typeof obj.id === 'number') userId = obj.id;
+        if (obj && typeof obj.first_name === 'string') userFirstName = obj.first_name;
+        if (obj && typeof obj.username === 'string') userUsername = obj.username;
+      } catch {}
+    }
+  } catch {}
+
+  return {
+    initDataLen: initDataRaw.length,
+    hasHash,
+    hasAuthDate,
+    hasUser,
+    authDate,
+    authDateIso,
+    ageSeconds,
+    ttlSeconds: TELEGRAM_INIT_DATA_TTL_SECONDS,
+    expired,
+    queryId,
+    userId,
+    userFirstName,
+    userUsername,
+  } as const;
+}
+
+export function logInitDataDiagnostics(context: string = 'diagnostics') {
+  try {
+    const d = getInitDataDiagnostics();
+    console.log('[telegram]', context, 'initData diagnostics', d);
+  } catch (e) {
+    console.warn('[telegram]', context, 'initData diagnostics failed', e);
+  }
+}
 export function openInvoice(url: string, cb?: (status: 'paid' | 'cancelled' | 'failed') => void) {
   const wa = window.Telegram?.WebApp;
   if (wa?.openInvoice) {
