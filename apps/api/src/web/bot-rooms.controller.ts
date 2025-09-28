@@ -1,11 +1,11 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ZRoomsCreateRes } from '@mygame/shared';
 import { RoomsService } from '../services/rooms.service';
-import { TelegramAuthGuard } from './telegram-auth.guard';
+import { BotSecretGuard } from './bot-secret.guard';
 
-@UseGuards(TelegramAuthGuard)
-@Controller('rooms')
-export class RoomsController {
+@UseGuards(BotSecretGuard)
+@Controller('bot/rooms')
+export class BotRoomsController {
   constructor(private roomsService: RoomsService) {}
 
   @Post()

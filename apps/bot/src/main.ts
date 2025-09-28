@@ -23,6 +23,11 @@ console.log(`- API_BASE_URL: ${API_BASE_URL}`);
 console.log(`- BILLING_BOT_SECRET: ${BILLING_BOT_SECRET ? 'set' : 'missing'}`);
 console.log(`- BILLING_ALERT_CHAT_ID: ${BILLING_ALERT_CHAT_ID ? 'set' : 'missing'}`);
 
+if (!BILLING_BOT_SECRET) {
+  console.error('Missing BILLING_BOT_SECRET (required for bot service access)');
+  process.exit(1);
+}
+
 const bot = new Bot(botToken);
 
 // Global error handler to keep bot alive on unexpected errors
@@ -35,7 +40,10 @@ async function createRoomWithRetry(baseUrl: string, attempts = 5, delayMs = 600)
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(`${baseUrl}/rooms`, { method: 'POST' });
+      const res = await fetch(`${baseUrl}/bot/rooms`, {
+        method: 'POST',
+        headers: { 'X-Bot-Secret': BILLING_BOT_SECRET },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as { roomId: string };
       if (json?.roomId) return json.roomId;
