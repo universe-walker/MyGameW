@@ -15,16 +15,60 @@ declare global {
   }
 }
 
+function getHashParams(): URLSearchParams | null {
+  if (typeof window === 'undefined') return null;
+  const hash = window.location.hash?.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  if (!hash) return null;
+  try {
+    return new URLSearchParams(hash);
+  } catch {
+    return null;
+  }
+}
+
+let cachedFallback: { initData: string; parsed: URLSearchParams } | null = null;
+
+function getFallbackInitData(): { initData: string; parsed: URLSearchParams } | null {
+  if (cachedFallback) return cachedFallback;
+  const hashParams = getHashParams();
+  if (!hashParams) return null;
+  const tgData = hashParams.get('tgWebAppData');
+  if (!tgData) return null;
+  try {
+    const initData = decodeURIComponent(tgData);
+    const parsed = new URLSearchParams(initData);
+    cachedFallback = { initData, parsed };
+    return cachedFallback;
+  } catch {
+    return null;
+  }
+}
+
 export function getInitDataRaw(): string | null {
-  return window.Telegram?.WebApp?.initData ?? null;
+  const fromTelegram = window.Telegram?.WebApp?.initData;
+  if (fromTelegram && fromTelegram.trim()) return fromTelegram;
+  return getFallbackInitData()?.initData ?? null;
 }
 
 export function getStartParam(): string | null {
-  return window.Telegram?.WebApp?.initDataUnsafe?.start_param ?? null;
+  const startFromTelegram = window.Telegram?.WebApp?.initDataUnsafe?.start_param ?? null;
+  if (startFromTelegram) return startFromTelegram;
+  const fallback = getFallbackInitData();
+  return fallback?.parsed.get('start_param') ?? null;
 }
 
 export function getUser(): TelegramUser | null {
-  return window.Telegram?.WebApp?.initDataUnsafe?.user ?? null;
+  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if (tgUser?.id) return tgUser;
+  const fallback = getFallbackInitData();
+  const rawUser = fallback?.parsed.get('user');
+  if (!rawUser) return null;
+  try {
+    const decoded = decodeURIComponent(rawUser);
+    return JSON.parse(decoded) as TelegramUser;
+  } catch {
+    return null;
+  }
 }
 
 export function openInvoice(url: string, cb?: (status: 'paid' | 'cancelled' | 'failed') => void) {
@@ -42,5 +86,3 @@ export function offInvoiceClosed(cb: (data: { url: string; status: 'paid' | 'can
   const wa = window.Telegram?.WebApp;
   wa?.offEvent?.('invoiceClosed', cb as any);
 }
-
-
