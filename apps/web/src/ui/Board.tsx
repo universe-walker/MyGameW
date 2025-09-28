@@ -19,7 +19,7 @@ export function Board({ roomId, board, canPick, round = 1 }: BoardProps) {
     const currentCats = board.map((c) => c.title);
     const valuesSet = new Set<number>();
     board.forEach((c) => c.values.forEach((v) => valuesSet.add(v)));
-    const MAX_ROWS = 5;
+    const MAX_ROWS = 4;
     const computedCosts = Array.from(valuesSet).sort((a, b) => a - b).slice(0, MAX_ROWS);
     const snap = boardSnapshotByRoom.get(roomKey);
     const cats = snap?.cats?.length ? snap.cats : currentCats;
@@ -33,7 +33,7 @@ export function Board({ roomId, board, canPick, round = 1 }: BoardProps) {
     const currentCats = board.map((c) => c.title);
     const valuesSet = new Set<number>();
     board.forEach((c) => c.values.forEach((v) => valuesSet.add(v)));
-    const MAX_ROWS = 5;
+    const MAX_ROWS = 4;
     const computedCosts = Array.from(valuesSet).sort((a, b) => a - b).slice(0, MAX_ROWS);
     const snap = boardSnapshotByRoom.get(roomKey);
     if (!snap) {

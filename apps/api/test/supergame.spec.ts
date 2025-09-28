@@ -40,7 +40,7 @@ class PrismaMock {
 
   constructor() {
     for (const c of this._cats) {
-      this._qs[c.id] = [100, 200, 300, 400, 500].map((v, idx) => ({
+      this._qs[c.id] = [100, 200, 300, 400].map((v, idx) => ({
         id: `${c.id}-q${idx + 1}`,
         value: v,
         prompt: `Prompt ${c.title} ${v}`,
@@ -401,9 +401,9 @@ describe('Super-game behavior', () => {
     engine.start(roomId);
     await tick(); await tick();
 
-    // Exhaust round 1 completely (4 cats x 5 values)
+    // Exhaust round 1 completely (4 cats x 4 values)
     const cats = ['Cat 1', 'Cat 2', 'Cat 3', 'Cat 4'];
-    const values = [100, 200, 300, 400, 500];
+    const values = [100, 200, 300, 400];
     for (const cat of cats) {
       for (const v of values) {
         // ensure prepare
@@ -471,3 +471,5 @@ describe('Super-game behavior', () => {
     expect(super200 + super400).toBeGreaterThanOrEqual(1);
   });
 });
+
+

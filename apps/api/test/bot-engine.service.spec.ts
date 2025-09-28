@@ -43,7 +43,7 @@ class PrismaMock {
 
   constructor() {
     for (const c of this._cats) {
-      this._qs[c.id] = [100, 200, 300, 400, 500].map((v, idx) => ({
+      this._qs[c.id] = [100, 200, 300, 400].map((v, idx) => ({
         id: `${c.id}-q${idx + 1}`,
         value: v,
         prompt: `Prompt ${c.title} ${v}`,
@@ -421,3 +421,5 @@ describe('BotEngineService game flow (expected behavior)', () => {
     expect(lastPhase?.question).toBeUndefined();
   });
 });
+
+

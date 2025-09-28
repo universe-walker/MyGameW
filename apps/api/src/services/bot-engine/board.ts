@@ -21,14 +21,14 @@ export async function ensureBoard(engine: BotEngineService, roomId: string): Pro
   const categories = await engine.prisma.category.findMany({
     take: 4,
     orderBy: { createdAt: 'asc' },
-    include: { questions: { select: { value: true }, orderBy: { value: 'asc' }, take: 5 } },
+    include: { questions: { select: { value: true }, orderBy: { value: 'asc' }, take: 4 } },
   });
 
   runtime.board = categories.map((category) => ({
     title: category.title,
     values: Array.from(new Set(category.questions.map((q) => q.value)))
       .sort((a, b) => a - b)
-      .slice(0, 5),
+      .slice(0, 4),
   }));
 
   await ensureSuperAssignmentsForRound(engine, roomId);
@@ -543,3 +543,4 @@ export async function loadAnswerById(engine: BotEngineService, questionId: strin
     return '';
   }
 }
+
