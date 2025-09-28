@@ -8,6 +8,7 @@ declare global {
         initDataUnsafe?: { user?: TelegramUser; start_param?: string };
         ready: () => void;
         openInvoice?: (url: string, cb?: (status: 'paid' | 'cancelled' | 'failed') => void) => void;
+        openTelegramLink?: (url: string) => void;
         onEvent?: (event: 'invoiceClosed', cb: (data: { url: string; status: 'paid' | 'cancelled' | 'failed' }) => void) => void;
         offEvent?: (event: 'invoiceClosed', cb: (data: { url: string; status: 'paid' | 'cancelled' | 'failed' }) => void) => void;
       };
@@ -73,8 +74,17 @@ export function getUser(): TelegramUser | null {
 
 export function openInvoice(url: string, cb?: (status: 'paid' | 'cancelled' | 'failed') => void) {
   const wa = window.Telegram?.WebApp;
-  if (!wa?.openInvoice) throw new Error('Telegram WebApp.openInvoice not available');
-  wa.openInvoice(url, cb);
+  if (wa?.openInvoice) {
+    wa.openInvoice(url, cb);
+    return;
+  }
+  console.warn('Telegram WebApp.openInvoice not available; falling back to openTelegramLink');
+  if (wa?.openTelegramLink) {
+    wa.openTelegramLink(url);
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+  cb?.('cancelled');
 }
 
 export function onInvoiceClosed(cb: (data: { url: string; status: 'paid' | 'cancelled' | 'failed' }) => void) {
