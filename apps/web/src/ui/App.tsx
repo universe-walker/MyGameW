@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { getInitDataRaw, getStartParam, getUser } from '../lib/telegram';
+import { getInitDataRaw, getUser } from '../lib/telegram';
 import { fetchApi, apiBase } from '../lib/api';
 import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../state/store';
@@ -23,7 +23,6 @@ export function App() {
   useEffect(() => {
     if (testHintAllowance > 0) setHintAllowance(testHintAllowance);
   }, [testHintAllowance]);
-  const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
   const [, setGameStarted] = useState(false);
 
   const showDebugConsole = (() => {
@@ -66,13 +65,6 @@ export function App() {
       }
     })();
 
-    const urlStartParam = new URLSearchParams(location.search).get('start_param');
-    const start = getStartParam() ?? urlStartParam;
-    if (start && start.startsWith('room_')) {
-      const id = start.slice('room_'.length);
-      // Do not auto-join: store pending id and let user decide
-      setPendingRoomId(id);
-    }
     // Load profile (score and hint balance)
     if (user) {
       fetchApi(`/profile`).then(async (r) => {
@@ -103,20 +95,6 @@ export function App() {
       console.log('[ui] onFindGame: emitted rooms:join', j.roomId);
     } catch (e) {
       console.error('[ui] onFindGame: error', e);
-    }
-  };
-
-  const onJoinPendingRoom = () => {
-    if (!pendingRoomId) return;
-    console.log('[ui] onJoinPendingRoom: join', pendingRoomId);
-    setGameStarted(true);
-    try {
-      const socket = connect();
-      socket?.emit('rooms:join', { roomId: pendingRoomId });
-      console.log('[ui] onJoinPendingRoom: emitted rooms:join', pendingRoomId);
-      setPendingRoomId(null);
-    } catch (e) {
-      console.error('[ui] onJoinPendingRoom: error', e);
     }
   };
 
@@ -191,15 +169,6 @@ export function App() {
         </div>
       ) : (
         <div className="grow flex flex-col items-center justify-center gap-4">
-          {pendingRoomId && (
-            <div className="w-full max-w-md p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
-              Приглашение в игру с ID: <span className="font-mono">{pendingRoomId}</span>
-              <div className="mt-2 flex gap-2">
-                <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={onJoinPendingRoom}>Присоединиться</button>
-                <button className="px-3 py-2 rounded bg-gray-200" onClick={() => setPendingRoomId(null)}>Скрыть</button>
-              </div>
-            </div>
-          )}
           {hintAllowance === 0 && (
             <div className="w-full max-w-md p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
               У вас нет подсказок. Вы можете купить подсказки за Звезды в магазине.

@@ -51,13 +51,6 @@ export function getInitDataRaw(): string | null {
   return getFallbackInitData()?.initData ?? null;
 }
 
-export function getStartParam(): string | null {
-  const startFromTelegram = window.Telegram?.WebApp?.initDataUnsafe?.start_param ?? null;
-  if (startFromTelegram) return startFromTelegram;
-  const fallback = getFallbackInitData();
-  return fallback?.parsed.get('start_param') ?? null;
-}
-
 export function getUser(): TelegramUser | null {
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
   if (tgUser?.id) return tgUser;
