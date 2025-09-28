@@ -319,6 +319,26 @@ function toQuestionType(v: string): QuestionType {
   return QuestionType.text;
 }
 
+async function deleteCategoryQuestionsCascade(categoryId: string) {
+  // Collect questions in the category
+  const questions = await prisma.question.findMany({ where: { categoryId }, select: { id: true } });
+  if (questions.length === 0) return;
+  const qIds = questions.map((q) => q.id);
+
+  // Collect SuperQuestions linked to these questions
+  const supers = await prisma.superQuestion.findMany({ where: { questionId: { in: qIds } }, select: { id: true } });
+  const sqIds = supers.map((s) => s.id);
+
+  // Delete RoomSuperCells that reference those SuperQuestions
+  if (sqIds.length > 0) {
+    await prisma.roomSuperCell.deleteMany({ where: { superQuestionId: { in: sqIds } } });
+    await prisma.superQuestion.deleteMany({ where: { id: { in: sqIds } } });
+  }
+
+  // Finally delete questions in this category
+  await prisma.question.deleteMany({ where: { id: { in: qIds } } });
+}
+
 async function seed() {
   for (const cat of data.categories) {
     // Ensure category exists (upsert by title)
@@ -334,8 +354,8 @@ async function seed() {
       categoryId = created.id;
     } else {
       categoryId = existing.id;
-      // Clear existing questions to avoid duplicates on reseed
-      await prisma.question.deleteMany({ where: { categoryId } });
+      // Clear existing questions to avoid duplicates on reseed (handle FKs)
+      await deleteCategoryQuestionsCascade(categoryId);
       // Optionally update tags/title if changed
       await prisma.category.update({
         where: { id: categoryId },
@@ -496,8 +516,8 @@ async function seedUserProvided() {
       categoryId = created.id;
     } else {
       categoryId = existing.id;
-      // Replace questions for this category on reseed to avoid duplicates
-      await prisma.question.deleteMany({ where: { categoryId } });
+      // Replace questions for this category on reseed to avoid duplicates (handle FKs)
+      await deleteCategoryQuestionsCascade(categoryId);
       await prisma.category.update({ where: { id: categoryId }, data: { title: cat.title, tags: cat.tags ?? [] } });
     }
 
