@@ -12,5 +12,6 @@ export function createInitialRoomRuntime(mode: GameMode): RoomRuntime {
     superCells: new Map(),
     blitzCells: new Map(),
     cellAssignments: new Map(),
+    usedCells: new Set(),
   };
 }

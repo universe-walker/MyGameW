@@ -35,6 +35,8 @@ export type RoomRuntime = {
   superCells?: Map<number, Set<string>>;
   blitzCells?: Map<number, Set<string>>;
   cellAssignments?: Map<number, Map<string, string>>;
+  // Tracks used category:value cells across the whole session to avoid repeats between rounds
+  usedCells?: Set<string>;
   blitzActive?: boolean;
   blitzOwnerId?: number;
   blitzIndex?: number;

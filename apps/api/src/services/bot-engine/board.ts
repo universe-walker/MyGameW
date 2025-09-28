@@ -1,4 +1,4 @@
-import type { BotEngineService } from '../bot-engine.service';
+ï»¿import type { BotEngineService } from '../bot-engine.service';
 import type { RoomRuntime } from './types';
 import { ensureSession } from './lifecycle';
 import { normalizeAnswer } from './utils';
@@ -19,17 +19,34 @@ export async function ensureBoard(engine: BotEngineService, roomId: string): Pro
   }
 
   const categories = await engine.prisma.category.findMany({
-    take: 4,
+    // Fetch more than needed; we'll pick ones with fresh values
+    take: 20,
     orderBy: { createdAt: 'asc' },
-    include: { questions: { select: { value: true }, orderBy: { value: 'asc' }, take: 4 } },
+    // Fetch all values so we can avoid repeats across rounds
+    include: { questions: { select: { value: true }, orderBy: { value: 'asc' } } },
   });
 
-  runtime.board = categories.map((category) => ({
-    title: category.title,
-    values: Array.from(new Set(category.questions.map((q) => q.value)))
-      .sort((a, b) => a - b)
-      .slice(0, 4),
-  }));
+  // Ensure we have a usedCells set to track category:value pairs used in this session
+  runtime.usedCells = runtime.usedCells ?? new Set<string>();
+  const used = runtime.usedCells;
+
+  const prepared = categories.map((category) => {
+    const allValues = Array.from(new Set((category as any).questions.map((q: any) => q.value))).sort(
+      (a, b) => (a as number) - (b as number),
+    );
+    const fresh = allValues.filter((v) => !used.has(`${category.title}:${v}`));
+    // Only use fresh values for the new round
+    const values = fresh.slice(0, 4).filter((v) => typeof v === 'number');
+    return { title: category.title as string, values, hasFresh: fresh.length > 0 } as {
+      title: string;
+      values: number[];
+      hasFresh: boolean;
+    };
+  });
+
+  // Prefer categories that have at least one fresh value
+  const picked = prepared.filter((c) => c.hasFresh).slice(0, 4);
+  runtime.board = picked.map((c) => ({ title: c.title, values: c.values }));
 
   await ensureSuperAssignmentsForRound(engine, roomId);
   await ensureBlitzAssignmentsForRound(engine, roomId);
@@ -44,9 +61,9 @@ export async function loadQuestion(engine: BotEngineService, categoryTitle: stri
       orderBy: { createdAt: 'asc' },
       select: { prompt: true },
     });
-    return { category: categoryTitle, value, prompt: question?.prompt || `${categoryTitle} — ${value}` };
+    return { category: categoryTitle, value, prompt: question?.prompt || `${categoryTitle} â€” ${value}` };
   }
-  return { category: categoryTitle, value, prompt: `${categoryTitle} — ${value}` };
+  return { category: categoryTitle, value, prompt: `${categoryTitle} â€” ${value}` };
 }
 
 export async function ensureQuestionSelected(engine: BotEngineService, roomId: string): Promise<void> {
@@ -65,6 +82,9 @@ export async function ensureQuestionSelected(engine: BotEngineService, roomId: s
   category.values = category.values.filter((_, index) => index !== valueIndex);
   engine.emitBoardState(roomId);
   runtime.question = await loadQuestion(engine, category.title, value);
+  // Mark this cell as used to avoid repeats in next rounds
+  runtime.usedCells = runtime.usedCells ?? new Set<string>();
+  runtime.usedCells.add(`${category.title}:${value}`);
 }
 
 export async function onBoardPick(
@@ -94,6 +114,9 @@ export async function onBoardPick(
 
   runtime.question = await loadQuestion(engine, categoryTitle, value);
   runtime.questionId = getAssignedQuestionId(engine, roomId, categoryTitle, value) ?? undefined;
+  // Mark this cell as used to avoid repeats in next rounds
+  runtime.usedCells = runtime.usedCells ?? new Set<string>();
+  runtime.usedCells.add(`${categoryTitle}:${value}`);
 
   if (shouldTriggerBlitz(engine, runtime, categoryTitle, value)) {
     await engine.startBlitz(roomId, pickerId ?? getCurrentPickerId(engine, roomId) ?? 0, categoryTitle, value);
@@ -248,6 +271,9 @@ export async function botAutoPick(engine: BotEngineService, roomId: string): Pro
   engine.emitBoardState(roomId);
 
   runtime.question = await loadQuestion(engine, category.title, value);
+  // Mark this cell as used to avoid repeats in next rounds
+  runtime.usedCells = runtime.usedCells ?? new Set<string>();
+  runtime.usedCells.add(`${category.title}:${value}`);
   runtime.questionStartPickerIndex = runtime.pickerIndex ?? 0;
   runtime.answerIndex = runtime.pickerIndex ?? 0;
   const answererId = getCurrentAnswererId(engine, roomId);
@@ -490,7 +516,7 @@ export async function buildSuperOptions(engine: BotEngineService, categoryTitle:
     const [pick] = source.splice(index, 1);
     if (normalizeAnswer(pick) !== correctNorm) distractors.push(pick);
   }
-  const fallbacks = ['ß íå çíàþ', 'Êòî åãî çíàåò', 'Ýòî çàãàäêà'];
+  const fallbacks = ['Ð¯ Ð½Ðµ Ð·Ð½Ð°ÑŽ', 'ÐšÑ‚Ð¾ ÐµÐ³Ð¾ Ð·Ð½Ð°ÐµÑ‚', 'Ð­Ñ‚Ð¾ Ð·Ð°Ð³Ð°Ð´ÐºÐ°'];
   for (const fallback of fallbacks) {
     if (distractors.length >= 3) break;
     if (normalizeAnswer(fallback) !== correctNorm) distractors.push(fallback);
@@ -543,4 +569,5 @@ export async function loadAnswerById(engine: BotEngineService, questionId: strin
     return '';
   }
 }
+
 
