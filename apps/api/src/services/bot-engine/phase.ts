@@ -122,6 +122,7 @@ export function advanceAfterScore(engine: BotEngineService, roomId: string): voi
   if (wasCorrect) {
     runtime.pickerIndex = currentAnswerIdx;
     runtime.question = undefined;
+    runtime.questionId = undefined;
     runtime.questionOptions = undefined;
     runtime.isSuperQuestion = undefined;
     runtime.activePlayerId = null;
@@ -133,7 +134,9 @@ export function advanceAfterScore(engine: BotEngineService, roomId: string): voi
   if (runtime.isSuperQuestion) {
     const category = runtime.question?.category ?? 'unknown';
     const value = runtime.question?.value ?? 0;
-    void engine.loadAnswer(category, value).then((text) => {
+    const qid = runtime.questionId;
+    const loader = qid ? engine.loadAnswerById(qid) : engine.loadAnswer(category, value);
+    Promise.resolve(loader).then((text) => {
       try {
         engine.server?.to(roomId).emit('answer:reveal', { roomId, category, value, text } as any);
       } catch (error) {
@@ -146,6 +149,7 @@ export function advanceAfterScore(engine: BotEngineService, roomId: string): voi
       const nextRuntime = engine.rooms.get(roomId);
       if (!nextRuntime?.running) return;
       nextRuntime.question = undefined;
+      nextRuntime.questionId = undefined;
       nextRuntime.questionOptions = undefined;
       nextRuntime.isSuperQuestion = undefined;
       nextRuntime.activePlayerId = null;
@@ -182,19 +186,22 @@ export function advanceAfterScore(engine: BotEngineService, roomId: string): voi
 
   const category = runtime.question?.category ?? 'unknown';
   const value = runtime.question?.value ?? 0;
-  void engine.loadAnswer(category, value).then((text) => {
-    try {
-      engine.server?.to(roomId).emit('answer:reveal', { roomId, category, value, text } as any);
-    } catch (error) {
-      void error;
-    }
-  });
+    const qid = runtime.questionId;
+    const loader = qid ? engine.loadAnswerById(qid) : engine.loadAnswer(category, value);
+    Promise.resolve(loader).then((text) => {
+      try {
+        engine.server?.to(roomId).emit('answer:reveal', { roomId, category, value, text } as any);
+      } catch (error) {
+        void error;
+      }
+    });
 
   engine.goto(roomId, 'round_end', Date.now() + engine.config.revealMs);
   engine.timers.set(roomId, 'phase_round_end', engine.config.revealMs, () => {
     const nextRuntime = engine.rooms.get(roomId);
     if (!nextRuntime?.running) return;
     nextRuntime.question = undefined;
+    nextRuntime.questionId = undefined;
     nextRuntime.questionOptions = undefined;
     nextRuntime.isSuperQuestion = undefined;
     nextRuntime.activePlayerId = null;

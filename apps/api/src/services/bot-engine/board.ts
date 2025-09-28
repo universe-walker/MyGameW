@@ -44,8 +44,10 @@ export async function ensureBoard(engine: BotEngineService, roomId: string): Pro
     };
   });
 
-  // Prefer categories that have at least one fresh value
-  const picked = prepared.filter((c) => c.hasFresh).slice(0, 4);
+  // Prefer categories that have at least one fresh value, pick randomly
+  const pool = prepared.filter((c) => c.hasFresh);
+  const shuffled = pool.slice().sort(() => engine.rand() - 0.5);
+  const picked = shuffled.slice(0, 4);
   runtime.board = picked.map((c) => ({ title: c.title, values: c.values }));
 
   await ensureSuperAssignmentsForRound(engine, roomId);
@@ -61,9 +63,24 @@ export async function loadQuestion(engine: BotEngineService, categoryTitle: stri
       orderBy: { createdAt: 'asc' },
       select: { prompt: true },
     });
-    return { category: categoryTitle, value, prompt: question?.prompt || `${categoryTitle} — ${value}` };
+    return { category: categoryTitle, value, prompt: question?.prompt || `${categoryTitle} - ${value}` };
   }
-  return { category: categoryTitle, value, prompt: `${categoryTitle} — ${value}` };
+  return { category: categoryTitle, value, prompt: `${categoryTitle} - ${value}` };
+}
+
+export async function loadQuestionById(
+  engine: BotEngineService,
+  questionId: string,
+  fallbackCategoryTitle: string,
+  fallbackValue: number,
+) {
+  try {
+    const question = await engine.prisma.question.findUnique({ where: { id: questionId }, select: { prompt: true } });
+    if (question?.prompt) return { category: fallbackCategoryTitle, value: fallbackValue, prompt: question.prompt as any };
+  } catch {
+    // ignore
+  }
+  return loadQuestion(engine, fallbackCategoryTitle, fallbackValue);
 }
 
 export async function ensureQuestionSelected(engine: BotEngineService, roomId: string): Promise<void> {
@@ -81,10 +98,18 @@ export async function ensureQuestionSelected(engine: BotEngineService, roomId: s
 
   category.values = category.values.filter((_, index) => index !== valueIndex);
   engine.emitBoardState(roomId);
-  runtime.question = await loadQuestion(engine, category.title, value);
+  runtime.questionId = getAssignedQuestionId(engine, roomId, category.title, value) ?? undefined;
+  runtime.question = runtime.questionId
+    ? await loadQuestionById(engine, runtime.questionId, category.title, value)
+    : await loadQuestion(engine, category.title, value);
   // Mark this cell as used to avoid repeats in next rounds
   runtime.usedCells = runtime.usedCells ?? new Set<string>();
   runtime.usedCells.add(`${category.title}:${value}`);
+  // Mark questionId as used in this session
+  if (runtime.questionId) {
+    runtime.usedQuestionIds = runtime.usedQuestionIds ?? new Set<string>();
+    runtime.usedQuestionIds.add(runtime.questionId);
+  }
 }
 
 export async function onBoardPick(
@@ -112,11 +137,18 @@ export async function onBoardPick(
   category.values.splice(valueIndex, 1);
   engine.emitBoardState(roomId);
 
-  runtime.question = await loadQuestion(engine, categoryTitle, value);
   runtime.questionId = getAssignedQuestionId(engine, roomId, categoryTitle, value) ?? undefined;
+  runtime.question = runtime.questionId
+    ? await loadQuestionById(engine, runtime.questionId, categoryTitle, value)
+    : await loadQuestion(engine, categoryTitle, value);
   // Mark this cell as used to avoid repeats in next rounds
   runtime.usedCells = runtime.usedCells ?? new Set<string>();
   runtime.usedCells.add(`${categoryTitle}:${value}`);
+  // Mark questionId as used in this session
+  if (runtime.questionId) {
+    runtime.usedQuestionIds = runtime.usedQuestionIds ?? new Set<string>();
+    runtime.usedQuestionIds.add(runtime.questionId);
+  }
 
   if (shouldTriggerBlitz(engine, runtime, categoryTitle, value)) {
     await engine.startBlitz(roomId, pickerId ?? getCurrentPickerId(engine, roomId) ?? 0, categoryTitle, value);
@@ -270,10 +302,19 @@ export async function botAutoPick(engine: BotEngineService, roomId: string): Pro
   category.values.splice(valueIndex, 1);
   engine.emitBoardState(roomId);
 
-  runtime.question = await loadQuestion(engine, category.title, value);
+  runtime.questionId = getAssignedQuestionId(engine, roomId, category.title, value) ?? undefined;
+  runtime.question = runtime.questionId
+    ? await loadQuestionById(engine, runtime.questionId, category.title, value)
+    : await loadQuestion(engine, category.title, value);
   // Mark this cell as used to avoid repeats in next rounds
   runtime.usedCells = runtime.usedCells ?? new Set<string>();
   runtime.usedCells.add(`${category.title}:${value}`);
+  // Mark questionId as used in this session
+  runtime.questionId = getAssignedQuestionId(engine, roomId, category.title, value) ?? undefined;
+  if (runtime.questionId) {
+    runtime.usedQuestionIds = runtime.usedQuestionIds ?? new Set<string>();
+    runtime.usedQuestionIds.add(runtime.questionId);
+  }
   runtime.questionStartPickerIndex = runtime.pickerIndex ?? 0;
   runtime.answerIndex = runtime.pickerIndex ?? 0;
   const answererId = getCurrentAnswererId(engine, roomId);
@@ -414,6 +455,8 @@ export async function ensureCellAssignmentsForRound(engine: BotEngineService, ro
   runtime.cellAssignments = runtime.cellAssignments ?? new Map();
   if (!runtime.cellAssignments.has(round)) runtime.cellAssignments.set(round, new Map());
   const map = runtime.cellAssignments.get(round)!;
+  runtime.usedQuestionIds = runtime.usedQuestionIds ?? new Set<string>();
+  const usedQ = runtime.usedQuestionIds;
 
   for (const category of runtime.board) {
     const categoryRecord = await engine.prisma.category.findUnique({ where: { title: category.title } });
@@ -421,12 +464,15 @@ export async function ensureCellAssignmentsForRound(engine: BotEngineService, ro
     for (const value of category.values) {
       const key = `${category.title}:${value}`;
       if (map.has(key)) continue;
-      const base = await engine.prisma.question.findFirst({
+      const pool = await engine.prisma.question.findMany({
         where: { categoryId: categoryRecord.id, value },
         orderBy: { createdAt: 'asc' },
         select: { id: true },
+        take: 100,
       });
-      if (base?.id) map.set(key, base.id);
+      const candidate = pool.find((q) => q?.id && !usedQ.has(q.id as any));
+      const chosenId = (candidate?.id as any) || (pool[0]?.id as any);
+      if (chosenId) map.set(key, chosenId);
     }
   }
 }

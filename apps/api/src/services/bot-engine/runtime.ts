@@ -13,5 +13,6 @@ export function createInitialRoomRuntime(mode: GameMode): RoomRuntime {
     blitzCells: new Map(),
     cellAssignments: new Map(),
     usedCells: new Set(),
+    usedQuestionIds: new Set(),
   };
 }
