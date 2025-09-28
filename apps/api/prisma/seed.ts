@@ -370,6 +370,160 @@ async function seed() {
   }
 }
 
+// --- User-provided medical categories/questions (RU) ---
+async function seedUserProvided() {
+  const categories: Array<{
+    title: string;
+    tags?: string[];
+    questions: Array<{
+      value: number;
+      type: 'word' | 'text';
+      prompt: string;
+      answersAccept: string[];
+      canonicalAnswer?: string;
+      requireFull?: boolean;
+      language?: string;
+    }>;
+  }> = [
+    {
+      title: 'Этика и право',
+      tags: ['med', 'ethics'],
+      questions: [
+        { value: 100, type: 'word', prompt: 'Как называется право пациента отказаться от лечения после информирования?', answersAccept: ['информированный отказ'], canonicalAnswer: 'информированный отказ', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Как называется обязанность врача хранить сведения о пациенте?', answersAccept: ['медицинская тайна'], canonicalAnswer: 'медицинская тайна', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Как называется принцип уважения самостоятельных решений пациента?', answersAccept: ['принцип автономии'], canonicalAnswer: 'принцип автономии', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Как называется обязанность действовать в интересах пациента?', answersAccept: ['принцип благодеяния'], canonicalAnswer: 'принцип благодеяния', language: 'ru' },
+        { value: 400, type: 'word', prompt: 'Как называется лицо, уполномоченное принимать решения за недееспособного?', answersAccept: ['законный представитель'], canonicalAnswer: 'законный представитель', language: 'ru' },
+        { value: 400, type: 'word', prompt: 'Как называется ситуация, допускающая помощь без согласия из-за угрозы жизни?', answersAccept: ['экстренная ситуация'], canonicalAnswer: 'экстренная ситуация', language: 'ru' },
+        { value: 500, type: 'word', prompt: 'Как называется принцип равного распределения ресурсов по клинической потребности?', answersAccept: ['принцип справедливости'], canonicalAnswer: 'принцип справедливости', language: 'ru' },
+        { value: 500, type: 'word', prompt: 'Как называется юридический статус общей способности к сделкам и решениям?', answersAccept: ['дееспособность'], canonicalAnswer: 'дееспособность', language: 'ru' },
+      ],
+    },
+    {
+      title: 'Анатомия (без фото, только описание)',
+      tags: ['anat', 'med'],
+      questions: [
+        { value: 100, type: 'word', prompt: 'Двустворчатый клапан между левым предсердием и левым желудочком.', answersAccept: ['valva mitralis'], canonicalAnswer: 'valva mitralis', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Крупнейшая паренхиматозная железа брюшной полости', answersAccept: ['hepar'], canonicalAnswer: 'hepar', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Продолжение a. axillaris; идёт по медиальной борозде плеча; даёт a. profunda brachii.', answersAccept: ['arteria brachialis'], canonicalAnswer: 'arteria brachialis', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Единственная кость плечевого пояса, сочленяется с рукояткой грудины и акромионом.', answersAccept: ['clavicula'], canonicalAnswer: 'clavicula', language: 'ru' },
+        { value: 300, type: 'word', prompt: 'Складка брюшины с «портальной триадой»: ductus hepaticus communis, v. portae, a. hepatica propria.', answersAccept: ['ligamentum hepatoduodenale'], canonicalAnswer: 'ligamentum hepatoduodenale', language: 'ru' },
+        { value: 300, type: 'word', prompt: 'Сфинктер, регулирующий опорожнение желудка в двенадцатиперстную кишку.', answersAccept: ['sphincter pylori'], canonicalAnswer: 'sphincter pylori', language: 'ru' },
+      ],
+    },
+    {
+      title: 'Фармакология: механизм действия',
+      tags: ['pharm', 'med'],
+      questions: [
+        // Пропущено: нет ответа у пользователя
+        // { value: 200, type: 'word', prompt: 'Основной антикоагулянтный эффект НМГ — преимущественная инактивация какого фактора?', answersAccept: ['фактор Ха'], canonicalAnswer: 'фактор Ха', language: 'ru' },
+      ],
+    },
+    {
+      title: 'Ятрогенные осложнения',
+      tags: ['pharm', 'complications', 'med'],
+      questions: [
+        { value: 100, type: 'word', prompt: 'Длительный приём НПВП; желудочное кровотечение, положительный тест на скрытую кровь. Назовите осложнение.', answersAccept: ['язва желудка'], canonicalAnswer: 'язва желудка', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Терапия опиоидами; снижение перистальтики, твёрдый стул. Назовите осложнение.', answersAccept: ['запор'], canonicalAnswer: 'запор', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'ИАПФ используется для лечения артериальной гипертензии. Назовите самое частое осложнение при использовании данного препарата?', answersAccept: ['сухой кашель'], canonicalAnswer: 'сухой кашель', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Тиазидный диуретик; слабость, аритмия, низкий K⁺ в сыворотке. Назовите осложнение.', answersAccept: ['гипокалиемия'], canonicalAnswer: 'гипокалиемия', language: 'ru' },
+
+        { value: 200, type: 'word', prompt: 'Метформин при сахарном диабете; тахипноэ, высокий лактат без гипоксии. Назовите осложнение.', answersAccept: ['лактатацидоз'], canonicalAnswer: 'лактатацидоз', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Бета-блокатор у пациента с бронхиальной астмой; свистящее дыхание, экспираторная одышка. Назовите осложнение.', answersAccept: ['бронхоспазм'], canonicalAnswer: 'бронхоспазм', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Аминогликозид; рост креатинина, цилиндрурия. Назовите осложнение.', answersAccept: ['нефротоксичность'], canonicalAnswer: 'нефротоксичность', language: 'ru' },
+
+        { value: 300, type: 'word', prompt: 'Фторхинолон у пожилого пациента; внезапная боль в ахилловой области, дефект при пальпации. Назовите осложнение.', answersAccept: ['разрыв сухожилия'], canonicalAnswer: 'разрыв сухожилия', language: 'ru' },
+        { value: 300, type: 'word', prompt: 'Статин в высокой дозе; миалгии, высокий КФК, тёмная моча. Назовите осложнение.', answersAccept: ['рабдомиолиз'], canonicalAnswer: 'рабдомиолиз', language: 'ru' },
+
+        { value: 400, type: 'word', prompt: 'Метотрексат; бледность, инфекции, тромбоцитопения, угнетена функция костного мозга. Назовите осложнение.', answersAccept: ['панцитопения'], canonicalAnswer: 'панцитопения', language: 'ru' },
+        { value: 400, type: 'word', prompt: 'Спиронолактон у мужчины; болезненность и увеличение молочных желёз. Назовите осложнение.', answersAccept: ['гинекомастия'], canonicalAnswer: 'гинекомастия', language: 'ru' },
+
+        { value: 500, type: 'word', prompt: 'Петлевой диуретик в высоких дозах; снижение слуха, шум в ушах, обратимая глухота. Назовите осложнение.', answersAccept: ['ототоксичность'], canonicalAnswer: 'ототоксичность', language: 'ru' },
+      ],
+    },
+    {
+      title: 'Клиническая психиатрия',
+      tags: ['psych', 'med'],
+      questions: [
+        { value: 100, type: 'word', prompt: 'Острый приступ интенсивной тревоги с вегетативными симптомами (пик ≤10 минут), страх смерти. Назовите состояние.', answersAccept: ['паническая атака'], canonicalAnswer: 'паническая атака', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Сниженное настроение ≥2 недель, ангедония, утомляемость, идеи вины. Назовите эпизод.', answersAccept: ['депрессивный эпизод'], canonicalAnswer: 'депрессивный эпизод', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Через 2–3 суток абстиненции: тремор, дезориентация, зоогаллюцинации, вегетатика. Назовите состояние.', answersAccept: ['алкогольный делирий'], canonicalAnswer: 'алкогольный делирий', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Выраженный страх оценки и внимания окружающих, избегание публичных ситуаций. Назовите расстройство.', answersAccept: ['социальная фобия'], canonicalAnswer: 'социальная фобия', language: 'ru' },
+
+        { value: 200, type: 'word', prompt: 'Навязчивые мысли и ритуалы, занимающие >1 часа в день, осознаются как свои. Назовите расстройство.', answersAccept: ['обсессивно-компульсивное расстройство'], canonicalAnswer: 'обсессивно-компульсивное расстройство', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Пережитая травма; навязчивые воспоминания, избегание, гипервозбуждение >1 месяца. Назовите расстройство.', answersAccept: ['посттравматическое стрессовое расстройство'], canonicalAnswer: 'посттравматическое стрессовое расстройство', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Дефицит массы, искажённый образ тела, ограничение питания, аменорея. Назовите расстройство.', answersAccept: ['анорексия нервная'], canonicalAnswer: 'анорексия нервная', language: 'ru' },
+
+        { value: 300, type: 'word', prompt: 'Непоколебимая убеждённость в преследовании при сохранной логике вне бредовой темы. Назовите вид бреда.', answersAccept: ['бред преследования'], canonicalAnswer: 'бред преследования', language: 'ru' },
+        { value: 300, type: 'word', prompt: 'Множественные моторные тики и вокализации, начало в детстве, длительность >1 года. Назовите синдром.', answersAccept: ['синдром Туретта'], canonicalAnswer: 'синдром Туретта', language: 'ru' },
+        { value: 300, type: 'word', prompt: 'В первые две недели после родов — бред, галлюцинации, дезорганизация поведения. Назовите состояние.', answersAccept: ['послеродовый психоз'], canonicalAnswer: 'послеродовый психоз', language: 'ru' },
+
+        { value: 400, type: 'word', prompt: 'Убеждённость, что близкого человека подменили двойником-обманщиком. Назовите синдром.', answersAccept: ['синдром Капгра'], canonicalAnswer: 'синдром Капгра', language: 'ru' },
+        { value: 400, type: 'word', prompt: 'Нигилистический бред: отрицание существования органов, себя, мира. Назовите синдром.', answersAccept: ['синдром Котара'], canonicalAnswer: 'синдром Котара', language: 'ru' },
+        { value: 400, type: 'word', prompt: 'Мучительное внутреннее беспокойство и потребность двигаться, часто на фоне нейролептика. Назовите состояние.', answersAccept: ['акатизия'], canonicalAnswer: 'акатизия', language: 'ru' },
+        { value: 400, type: 'word', prompt: 'Чувство отчуждения собственного «Я», воспринимаемое как постороннее. Назовите феномен.', answersAccept: ['деперсонализация'], canonicalAnswer: 'деперсонализация', language: 'ru' },
+
+        { value: 500, type: 'word', prompt: 'Застывание в неудобной позе с сохранением приданной позы длительно. Назовите симптом.', answersAccept: ['каталепсия'], canonicalAnswer: 'каталепсия', language: 'ru' },
+        { value: 500, type: 'word', prompt: 'У хронического алкоголизма — полиморфные слуховые галлюцинации при ясном сознании. Назовите состояние.', answersAccept: ['алкогольный галлюциноз'], canonicalAnswer: 'алкогольный галлюциноз', language: 'ru' },
+      ],
+    },
+    {
+      title: 'Эпонимы',
+      tags: ['eponyms', 'med'],
+      questions: [
+        { value: 100, type: 'word', prompt: 'Двигательная триада: тремор покоя, ригидность, брадикинезия; гипомимия, микрография. Назовите болезнь.', answersAccept: ['болезнь Паркинсона'], canonicalAnswer: 'болезнь Паркинсона', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Хронический гиперкортицизм: лунообразное лицо, пурпурные стрии, проксимальная миопатия. Назовите синдром.', answersAccept: ['синдром Кушинга'], canonicalAnswer: 'синдром Кушинга', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Воспалительная боль в спине, двусторонний сакроилиит, ограничение грудной экскурсии. Назовите болезнь.', answersAccept: ['болезнь Бехтерева'], canonicalAnswer: 'болезнь Бехтерева', language: 'ru' },
+        { value: 100, type: 'word', prompt: 'Разгибание большого пальца стопы при штриховом раздражении подошвы. Назовите симптом.', answersAccept: ['симптом Бабинского'], canonicalAnswer: 'симптом Бабинского', language: 'ru' },
+
+        { value: 200, type: 'word', prompt: 'Трифазная смена окраски пальцев на холод: бледность, цианоз, гиперемия. Назовите синдром.', answersAccept: ['синдром Рейно'], canonicalAnswer: 'синдром Рейно', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Приступы системного головокружения, флюктуирующая нейросенсорная тугоухость, шум в ухе. Назовите болезнь.', answersAccept: ['болезнь Меньера'], canonicalAnswer: 'болезнь Меньера', language: 'ru' },
+        { value: 200, type: 'word', prompt: 'Гиперпигментация кожных складок, гипонатриемия, гиперкалиемия, низкий кортизол. Назовите болезнь.', answersAccept: ['болезнь Аддисона'], canonicalAnswer: 'болезнь Аддисона', language: 'ru' },
+
+        { value: 300, type: 'word', prompt: 'Трансмуральное сегментарное гранулематозное воспаление ЖКТ, «пропущенные» участки, свищи. Назовите болезнь.', answersAccept: ['болезнь Крона'], canonicalAnswer: 'болезнь Крона', language: 'ru' },
+
+        { value: 400, type: 'word', prompt: 'Боль и сопротивление при разгибании голени при согнутом бедре. Назовите симптом.', answersAccept: ['симптом Кернига'], canonicalAnswer: 'симптом Кернига', language: 'ru' },
+        { value: 400, type: 'word', prompt: 'Резкая болезненность при быстром отнятии руки от брюшной стенки. Назовите симптом.', answersAccept: ['симптом Блюмберга'], canonicalAnswer: 'симптом Блюмберга', language: 'ru' },
+      ],
+    },
+  ];
+
+  for (const cat of categories) {
+    const existing = await prisma.category.findUnique({ where: { title: cat.title } });
+    let categoryId: string;
+    if (!existing) {
+      const created = await prisma.category.create({ data: { title: cat.title, tags: cat.tags ?? [] } });
+      categoryId = created.id;
+    } else {
+      categoryId = existing.id;
+      // Replace questions for this category on reseed to avoid duplicates
+      await prisma.question.deleteMany({ where: { categoryId } });
+      await prisma.category.update({ where: { id: categoryId }, data: { title: cat.title, tags: cat.tags ?? [] } });
+    }
+
+    for (const q of cat.questions) {
+      const answersAccept = q.answersAccept ?? [];
+      const canonical = q.canonicalAnswer || answersAccept[0] || '';
+      if (!canonical) continue; // skip incomplete entries
+      await prisma.question.create({
+        data: {
+          type: toQuestionType(q.type),
+          prompt: q.prompt,
+          rawAnswer: canonical,
+          canonicalAnswer: canonical,
+          value: q.value,
+          answersAccept,
+          answersReject: [],
+          requireFull: q.requireFull ?? false,
+          language: q.language ?? 'ru',
+          hint: null,
+          categoryId,
+        },
+      });
+    }
+  }
+}
+
 // --- SuperQuestion seeding (test content) ---
 async function seedSuperQuestionsMedical() {
   // Pick medical-related categories by tags
@@ -461,6 +615,8 @@ async function seedSuperQuestionsMedical() {
 seed()
   .then(async () => {
     console.log('Seeded categories and questions');
+    // Include user-provided medical categories
+    await seedUserProvided();
     await seedSuperQuestionsMedical();
     await prisma.$disconnect();
   })
