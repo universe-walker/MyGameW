@@ -28,6 +28,7 @@ function getHashParams(): URLSearchParams | null {
 }
 
 let cachedFallback: { initData: string; parsed: URLSearchParams } | null = null;
+export const TELEGRAM_INIT_DATA_TTL_SECONDS = 24 * 60 * 60;
 
 function getFallbackInitData(): { initData: string; parsed: URLSearchParams } | null {
   if (cachedFallback) return cachedFallback;
@@ -65,6 +66,27 @@ export function getUser(): TelegramUser | null {
   }
 }
 
+
+export function getAuthDate(): number | null {
+  const initDataRaw = getInitDataRaw();
+  if (initDataRaw && initDataRaw.trim()) {
+    try {
+      const params = new URLSearchParams(initDataRaw);
+      const authDate = params.get('auth_date');
+      if (authDate) {
+        const value = Number(authDate);
+        if (Number.isFinite(value)) return value;
+      }
+    } catch {
+      // ignore parsing errors
+    }
+  }
+  const fallback = getFallbackInitData();
+  const fallbackAuth = fallback?.parsed.get('auth_date');
+  if (!fallbackAuth) return null;
+  const value = Number(fallbackAuth);
+  return Number.isFinite(value) ? value : null;
+}
 export function openInvoice(url: string, cb?: (status: 'paid' | 'cancelled' | 'failed') => void) {
   const wa = window.Telegram?.WebApp;
   if (wa?.openInvoice) {
@@ -89,3 +111,4 @@ export function offInvoiceClosed(cb: (data: { url: string; status: 'paid' | 'can
   const wa = window.Telegram?.WebApp;
   wa?.offEvent?.('invoiceClosed', cb as any);
 }
+

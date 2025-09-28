@@ -1,12 +1,34 @@
 import { io } from 'socket.io-client';
 import type { Socket } from '@mygame/shared';
 import { apiHostBase, apiPathPrefix } from './api';
+import { getAuthDate, TELEGRAM_INIT_DATA_TTL_SECONDS } from './telegram';
 
 let socket: Socket | null = null;
 
 export function connectSocket(initDataRaw: string) {
   const nsUrl = `${apiHostBase}/game`;
+  const authDate = getAuthDate();
+  const authDateIso = authDate !== null ? new Date(authDate * 1000).toISOString() : null;
+  let authAgeSeconds: number | null = null;
+  let authExpired: boolean | null = null;
 
+  if (authDate !== null) {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    authAgeSeconds = Math.max(0, nowSeconds - authDate);
+    authExpired = authAgeSeconds > TELEGRAM_INIT_DATA_TTL_SECONDS;
+    console.log('[socket] initData auth_date check', {
+      authDate,
+      authDateIso,
+      ageSeconds: authAgeSeconds,
+      ttlSeconds: TELEGRAM_INIT_DATA_TTL_SECONDS,
+      expired: authExpired,
+    });
+    if (authExpired) {
+      console.warn('[socket] initData auth_date appears expired');
+    }
+  } else {
+    console.warn('[socket] initData auth_date missing');
+  }
   if (socket) {
     console.log(
       '[socket] connectSocket: disconnect existing socket id=',
@@ -20,8 +42,11 @@ export function connectSocket(initDataRaw: string) {
   console.log('[socket] connectSocket: creating new socket', {
     url: nsUrl,
     initDataRawLen: initDataRaw?.length ?? 0,
+    authDate,
+    authDateIso,
+    authDateAgeSeconds: authAgeSeconds ?? undefined,
+    authDateExpired: authExpired ?? undefined,
   });
-
   socket = io(nsUrl, {
     // Ensure the Socket.IO handshake goes through the Vite proxy prefix
     path: `${apiPathPrefix || ''}/socket.io` || '/socket.io',
@@ -68,5 +93,3 @@ export function disconnectSocket() {
     socket = null;
   }
 }
-
-

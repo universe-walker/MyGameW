@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { getInitDataRaw, getUser } from '../lib/telegram';
+import { getInitDataRaw, getUser, getAuthDate, TELEGRAM_INIT_DATA_TTL_SECONDS } from '../lib/telegram';
 import { fetchApi, apiBase } from '../lib/api';
 import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../state/store';
@@ -51,6 +51,26 @@ export function App() {
 
   useEffect(() => {
     const initDataRaw = getInitDataRaw() ?? '';
+    const authDate = getAuthDate();
+    if (authDate !== null) {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const ageSeconds = Math.max(0, nowSeconds - authDate);
+      const expiresInSeconds = TELEGRAM_INIT_DATA_TTL_SECONDS - ageSeconds;
+      const expired = ageSeconds > TELEGRAM_INIT_DATA_TTL_SECONDS;
+      console.log('[telegram] initData auth_date check', {
+        authDate,
+        authDateIso: new Date(authDate * 1000).toISOString(),
+        ageSeconds,
+        expiresInSeconds,
+        ttlSeconds: TELEGRAM_INIT_DATA_TTL_SECONDS,
+        expired,
+      });
+      if (expired) {
+        console.warn('[telegram] initData appears expired relative to TTL');
+      }
+    } else {
+      console.warn('[telegram] initData auth_date missing');
+    }
     const user = getUser();
     verify.mutate(initDataRaw);
     // API health check
