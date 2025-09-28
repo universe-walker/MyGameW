@@ -38,7 +38,8 @@ export function verifyInitData(initDataRaw: string, botToken: string): VerifyIni
 
   const dataCheckString = buildDataCheckString(data);
   // If botToken is empty, signature verification is meaningless. We still compute fields safely.
-  const secretKey = crypto.createHash('sha256').update(botToken || '').digest();
+  // Telegram WebApp secret key: HMAC_SHA256(bot_token) with key "WebAppData"
+  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken || '').digest();
   const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
   const signatureValid = hasHash ? hmac === data.hash : false;
 

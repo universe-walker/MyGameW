@@ -18,7 +18,8 @@ describe('verifyInitData', () => {
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([k, v]) => `${k}=${v}`)
       .join('\n');
-    const secret = crypto.createHash('sha256').update(token).digest();
+    // For Telegram WebApp, secret = HMAC_SHA256(bot_token) with key "WebAppData"
+    const secret = crypto.createHmac('sha256', 'WebAppData').update(token).digest();
     const hash = crypto.createHmac('sha256', secret).update(entries).digest('hex');
     params.set('hash', hash);
     const initDataRaw = params.toString();
@@ -53,7 +54,7 @@ describe('verifyInitData', () => {
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([k, v]) => `${k}=${v}`)
       .join('\n');
-    const secret = crypto.createHash('sha256').update(token).digest();
+    const secret = crypto.createHmac('sha256', 'WebAppData').update(token).digest();
     const hash = crypto.createHmac('sha256', secret).update(entries).digest('hex');
     params.set('hash', hash);
     const initDataRaw = params.toString();
