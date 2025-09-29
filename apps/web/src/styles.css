@@ -11,7 +11,7 @@ html, body, #root { height: 100%; }
 }
 
 .score-burst {
-  animation: score-burst-up 1s ease-out forwards;
+  animation: score-burst-up 1.5s ease-out forwards;
   text-shadow: 0 1px 2px rgba(0,0,0,0.4);
 }
 

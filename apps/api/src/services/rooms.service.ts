@@ -46,9 +46,28 @@ export class RoomsService {
     await this.redis.setRoomMeta(roomId, { createdAt: now, solo: true, botCount });
     await this.redis.touchRoom(roomId);
 
+    // Predefined pool of Russian bot names (cycled if needed)
+    const botNames = [
+      'Алексей',
+      'Марина',
+      'Иван',
+      'Сергей',
+      'Екатерина',
+      'Ольга',
+      'Павел',
+      'Наталья',
+      'Дмитрий',
+      'Анна',
+      'Михаил',
+      'Виктория',
+      'Ирина',
+      'Кирилл',
+      'Юлия',
+    ];
+
     const bots: TRoomPlayer[] = Array.from({ length: botCount }).map((_, i) => ({
       id: -1 - i,
-      name: `Bot #${i + 1}`,
+      name: botNames[i % botNames.length],
       bot: true,
     }));
 

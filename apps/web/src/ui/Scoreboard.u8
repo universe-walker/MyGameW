@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import type { Player } from '../state/store';
 
 export type ScoreboardProps = {
@@ -29,7 +29,7 @@ export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: S
           // Cleanup after animation ends
           setTimeout(() => {
             setBursts((arr) => arr.filter((b) => b.id !== id));
-          }, 2200);
+          }, 1700);
         }
       }
       nextPrev[k] = cur;
@@ -56,14 +56,14 @@ export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: S
               ))}
             </div>
 
-            <div className="text-sm opacity-80">{p.bot ? `Бот ${i + 1}` : 'Игрок'}</div>
+            <div className="text-sm opacity-80">{p.bot ? `Р‘РѕС‚ ${i + 1}` : 'РРіСЂРѕРє'}</div>
             <div className="text-lg font-semibold">{p.name}</div>
             <div className="mt-2 text-2xl">{score}</div>
             {p.bot ? (
-              null
+              <div className="mt-1 text-xs text-yellow-300">{botStatuses[p.id] ?? ''}</div>
             ) : (
               <div className={`mt-1 text-xs ${isMyTurnToAnswer ? 'text-green-300' : 'text-gray-400'}`}>
-                {isMyTurnToAnswer ? 'Ваш ход' : ''}
+                {isMyTurnToAnswer ? 'Р’Р°С€ С…РѕРґ' : ''}
               </div>
             )}
           </div>
@@ -72,3 +72,4 @@ export function Scoreboard({ players, botStatuses, isMyTurnToAnswer, scores }: S
     </div>
   );
 }
+
