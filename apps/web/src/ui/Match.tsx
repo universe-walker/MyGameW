@@ -256,7 +256,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
       {/* Header: active players + timer */}
       <div className="flex items-center justify-between p-2 rounded bg-slate-100">
         <div className="flex items-center gap-2">
-          {statusText && <div className="text-sm">{statusText}</div>}
+          <div className="text-sm leading-5 min-h-[20px]">{statusText || '\u00A0'}</div>
           {paused && (
             <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-1">⏸ Пауза</span>
           )}
