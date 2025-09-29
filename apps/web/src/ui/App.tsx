@@ -164,10 +164,10 @@ export function App() {
         <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xl font-bold text-center sm:text-left">MyGame</div>
           <div className="w-full sm:w-auto flex flex-wrap items-center justify-center sm:justify-end gap-2">
-            <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>Достижения</button>
-            <div className="text-sm px-2 py-1 rounded bg-yellow-100">Очки: {profileScore}</div>
-            <div className="text-sm px-2 py-1 rounded bg-yellow-50">⭐ Подсказки: {hintAllowance}</div>
-            <button id="open-shop-btn" className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>Магазин</button>
+            <button className="text-sm px-2 py-1 rounded bg-[#A23B72]" onClick={openAchievements}>Достижения</button>
+            <div className="text-sm px-2 py-1 rounded bg-[#A23B72]">Очки: {profileScore}</div>
+            <div className="text-sm px-2 py-1 rounded bg-[#A23B72]">⭐ Подсказки: {hintAllowance}</div>
+            <button id="open-shop-btn" className="text-sm px-2 py-1 rounded bg-[#A23B72]" onClick={openShop}>Магазин</button>
           </div>
         </div>
       )}
@@ -186,10 +186,10 @@ export function App() {
               </div>
             </div>
           )}
-          <button className="w-full max-w-md py-4 text-lg rounded bg-blue-600 text-white" onClick={onFindGame}>
+          <button className="w-full max-w-md py-4 text-lg rounded bg-[#2E86AB] text-white" onClick={onFindGame}>
             Многопользовательская игра
           </button>
-          <button className="w-full max-w-md py-4 text-lg rounded bg-indigo-600 text-white" onClick={onSoloGame}>
+          <button className="w-full max-w-md py-4 text-lg rounded bg-[#2E86AB] text-white" onClick={onSoloGame}>
             Одиночная игра
           </button>
           {!verified && <div className="text-sm text-gray-500">Инициализация...</div>}
