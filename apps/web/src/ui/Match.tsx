@@ -266,18 +266,71 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
           </div>
         </div>
       )}
-      {/* Header: active players + timer */}
-      <div className="flex items-center justify-between p-2 rounded bg-slate-100">
-        <div className="flex items-center gap-2">
-          <div className="text-sm leading-5 min-h-[20px]">{statusText || '\u00A0'}</div>
+
+      
+      {/* Header: active players + timer (стиль как у кнопок) */}
+      <div
+        className="
+          flex items-center justify-between
+          p-2 sm:p-3
+          rounded-2xl
+          bg-gradient-to-br from-indigo-800 to-indigo-900
+          text-white
+          shadow-[0_8px_20px_-4px_rgba(99,102,241,0.5)]
+          border-2 border-indigo-700
+          transition-all duration-300 ease-in-out
+        "
+      >
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Статус игры */}
+          <div
+            className="
+              text-sm sm:text-base leading-5 min-h-[20px]
+              font-['Dosis',sans-serif]
+              whitespace-nowrap
+            "
+          >
+            {statusText || '\u00A0'}
+          </div>
+
+          {/* Индикатор паузы — капсула в оранжевом градиенте */}
           {paused && (
-            <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-1">⏸ Пауза</span>
+            <span
+              className="
+                text-xs sm:text-sm
+                px-2.5 py-1
+                rounded-full
+                bg-gradient-to-br from-[#F5B041] to-[#F18F01]
+                shadow-[0_8px_15px_-3px_rgba(241,143,1,0.4)]
+                text-white
+                font-medium
+                inline-flex items-center gap-1
+              "
+            >
+              ⏸ Пауза
+            </span>
           )}
         </div>
+
+        {/* Таймер — моноширинная капсула в индиго-градиенте */}
         {!overlayActive && remainingMs !== undefined && statusText && (
-          <div className="font-mono">{Math.ceil(remainingMs / 1000)}с</div>
+          <div
+            className="
+              font-mono
+              text-sm sm:text-base
+              px-3 py-1
+              rounded-full
+              bg-gradient-to-br from-indigo-500 to-indigo-600
+              shadow-[0_8px_20px_-4px_rgba(99,102,241,0.5)]
+              border border-indigo-400/40
+            "
+            title="Оставшееся время"
+          >
+            {Math.ceil(remainingMs / 1000)}с
+          </div>
         )}
       </div>
+
 
       {/* Board */}
       {showBoard && (
