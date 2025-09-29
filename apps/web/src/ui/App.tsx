@@ -164,10 +164,42 @@ export function App() {
         <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xl font-bold text-center sm:text-left">MyGame</div>
           <div className="w-full sm:w-auto flex flex-wrap items-center justify-center sm:justify-end gap-2">
-            <button className="text-sm px-2 py-1 rounded bg-[#A23B72]" onClick={openAchievements}>Достижения</button>
-            <div className="text-sm px-2 py-1 rounded bg-[#A23B72]">Очки: {profileScore}</div>
-            <div className="text-sm px-2 py-1 rounded bg-[#A23B72]">⭐ Подсказки: {hintAllowance}</div>
-            <button id="open-shop-btn" className="text-sm px-2 py-1 rounded bg-[#A23B72]" onClick={openShop}>Магазин</button>
+            <div className="
+                text-sm px-4 py-2 
+                rounded-full
+                bg-gradient-to-br from-[#F5B041] to-[#F18F01]
+                shadow-[0_8px_15px_-3px_rgba(241,143,1,0.4)]
+                text-white font-medium
+                transition-all duration-300 ease-in-out
+                hover:translate-y-[2px] hover:shadow-none
+                active:opacity-50
+                cursor-pointer
+                flex items-center gap-2
+              " >🏆 Очки: {profileScore}</div>
+            <div className="
+                text-sm px-4 py-2 
+                rounded-full
+                bg-gradient-to-br from-[#F5B041] to-[#F18F01]
+                shadow-[0_8px_15px_-3px_rgba(241,143,1,0.4)]
+                text-white font-medium
+                transition-all duration-300 ease-in-out
+                hover:translate-y-[2px] hover:shadow-none
+                active:opacity-50
+                cursor-pointer
+                flex items-center gap-2
+              " >💡 Подсказки: {hintAllowance}</div>
+            <button id="open-shop-btn" className="
+                text-sm px-4 py-2 
+                rounded-full
+                bg-gradient-to-br from-[#F5B041] to-[#F18F01]
+                shadow-[0_8px_15px_-3px_rgba(241,143,1,0.4)]
+                text-white font-medium
+                transition-all duration-300 ease-in-out
+                hover:translate-y-[2px] hover:shadow-none
+                active:opacity-50
+                cursor-pointer
+                flex items-center gap-2
+              "  onClick={openShop}>Магазин</button>
           </div>
         </div>
       )}
@@ -179,17 +211,59 @@ export function App() {
       ) : (
         <div className="grow flex flex-col items-center justify-center gap-4">
           {hintAllowance === 0 && (
-            <div className="w-full max-w-md p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
-              У вас нет подсказок. Вы можете купить подсказки за Звезды в магазине.
-              <div className="mt-2">
-                <button className="px-3 py-2 rounded bg-yellow-600 text-white" onClick={openShop}>Открыть магазин</button>
-              </div>
-            </div>
+            <div className="
+  w-full max-w-md 
+  bg-gradient-to-br from-amber-50 to-orange-100
+  rounded-2xl
+  p-6
+  shadow-[0_10px_25px_-5px_rgba(251,146,60,0.3)]
+  border border-orange-200
+">
+  <div className="flex items-start gap-4">
+    <div className="
+      flex-shrink-0
+      w-12 h-12
+      bg-gradient-to-br from-orange-400 to-orange-500
+      rounded-full
+      flex items-center justify-center
+      text-2xl
+      shadow-lg
+    ">
+      💡
+    </div>
+    <div className="flex-1">
+      <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+        <span>Нет подсказок</span>
+      </h3>
+      <p className="text-gray-600 mb-4 text-sm">
+        Купите подсказки за Звезды ⭐ в магазине, чтобы получить преимущество в игре!
+      </p>
+      <button 
+        className="
+          px-6 py-3 
+          rounded-full
+          bg-gradient-to-br from-[#F5B041] to-[#F18F01]
+          shadow-[0_8px_15px_-3px_rgba(241,143,1,0.4)]
+          text-white font-semibold text-sm
+          transition-all duration-300 ease-in-out
+          hover:translate-y-[2px] hover:shadow-none
+          active:opacity-50
+          cursor-pointer
+          flex items-center gap-2
+        "
+        onClick={openShop}
+      >
+        <span>🛒</span>
+        Открыть магазин
+      </button>
+    </div>
+  </div>
+</div>
           )}
-          <button className="w-full max-w-md py-4 text-lg rounded bg-[#2E86AB] text-white" onClick={onFindGame}>
+          <button className="w-full max-w-md py-4 text-lg rounded-[50px] bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_20px_30px_-6px_rgba(46,134,171,0.5)] text-white transition-all duration-300 ease-in-out hover:translate-y-[3px] hover:shadow-none active:opacity-50 cursor-pointer" onClick={onFindGame}>
             Многопользовательская игра
           </button>
-          <button className="w-full max-w-md py-4 text-lg rounded bg-[#2E86AB] text-white" onClick={onSoloGame}>
+          <button className="w-full max-w-md py-4 text-lg rounded-[50px] bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_20px_30px_-6px_rgba(46,134,171,0.5)] text-white transition-all duration-300 ease-in-out hover:translate-y-[3px] hover:shadow-none active:opacity-50 cursor-pointer" onClick={onSoloGame}>
             Одиночная игра
           </button>
           {!verified && <div className="text-sm text-gray-500">Инициализация...</div>}
