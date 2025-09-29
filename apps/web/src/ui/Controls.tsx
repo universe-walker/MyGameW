@@ -88,18 +88,30 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
     }
     out = out.trim();
     if (!out) return;
+    // If game is paused (solo), resume first, then answer
+    if (paused && onResume) {
+      try { onResume(); } catch {}
+    }
     onAnswer(out);
   };
 
   const onHintClick = () => {
     if (!isMyTurnToAnswer) return;
     if (!canRevealHint) return; // UI will show shop button elsewhere
+    // If paused, resume first before enabling hint mode
+    if (paused && onResume) {
+      try { onResume(); } catch {}
+    }
     setHintMode((v) => !v);
   };
 
   const revealAt = (pos: number) => {
     if (!roomId) return;
     const socket = getSocket();
+    // Ensure pause is cleared before applying a hint
+    if (paused && onResume) {
+      try { onResume(); } catch {}
+    }
     socket?.emit('hint:reveal_letter', { roomId, position: pos });
     setHintMode(false);
   };

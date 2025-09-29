@@ -56,6 +56,19 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const dynamicOffset = baseOffset + overlayExtraOffset;
   const remainingMs = until ? Math.max(0, until + dynamicOffset - now) : undefined;
 
+  // Wrap answer action: if paused, resume first, then answer
+  const answerAfterResume = useCallback(
+    (text: string) => {
+      if (paused && onResume) {
+        try {
+          onResume();
+        } catch {}
+      }
+      onAnswer(text);
+    },
+    [paused, onResume, onAnswer],
+  );
+
   // Reset local overlay offsets only when a fresh phase/until arrives and overlay is NOT showing
   const lastPhaseRef = useRef<string | null>(null);
   const lastUntilRef = useRef<number | undefined>(undefined);
@@ -287,7 +300,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
             {question!.options!.map((opt) => (
               <button
                 key={opt}
-                onClick={() => onAnswer(opt)}
+                onClick={() => answerAfterResume(opt)}
                 className="px-3 py-2 rounded bg-indigo-600 text-white text-sm md:text-base text-left"
               >
                 {opt}
@@ -310,7 +323,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
             </button>
           )}
           <Controls
-            onAnswer={onAnswer}
+            onAnswer={answerAfterResume}
             onPause={onPause}
             onResume={onResume}
             onLeave={onLeave}
@@ -324,7 +337,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
       {/* Meta controls (pause/resume/leave) below */}
       <Controls
-        onAnswer={onAnswer}
+        onAnswer={answerAfterResume}
         onPause={onPause}
         onResume={onResume}
         onLeave={onLeave}
