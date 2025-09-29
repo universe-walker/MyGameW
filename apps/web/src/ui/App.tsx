@@ -158,7 +158,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-full flex flex-col p-4">
+    <div className="min-h-full flex flex-col p-4 bg-[#F5F5F5]">
       {/* AppBar (hidden for solo game page) */}
       {!(roomId && mode === 'solo') && (
         <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
