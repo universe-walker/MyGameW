@@ -131,8 +131,8 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     [players, activePlayerId],
   );
   const statusText = useMemo(() => {
-    if (phase === 'prepare') return activePlayerName ? `Выбирает игрок ${activePlayerName}` : '';
-    if (phase === 'answer_wait') return activePlayerName ? `Отвечает игрок ${activePlayerName}` : '';
+    if (phase === 'prepare') return activePlayerName ? `Выбирает ${activePlayerName}` : '';
+    if (phase === 'answer_wait') return activePlayerName ? `Отвечает ${activePlayerName}` : '';
     return '';
   }, [phase, activePlayerName]);
 
@@ -261,7 +261,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
             <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-1">⏸ Пауза</span>
           )}
         </div>
-        {!overlayActive && remainingMs !== undefined && (
+        {!overlayActive && remainingMs !== undefined && statusText && (
           <div className="font-mono">{Math.ceil(remainingMs / 1000)}с</div>
         )}
       </div>

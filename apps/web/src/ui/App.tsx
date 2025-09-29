@@ -165,7 +165,7 @@ export function App() {
           <div className="text-xl font-bold text-center sm:text-left">MyGame</div>
           <div className="w-full sm:w-auto flex flex-wrap items-center justify-center sm:justify-end gap-2">
             <button className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openAchievements}>Достижения</button>
-            <div className="text-sm px-2 py-1 rounded bg-yellow-100">Проф. очки: {profileScore}</div>
+            <div className="text-sm px-2 py-1 rounded bg-yellow-100">Очки: {profileScore}</div>
             <div className="text-sm px-2 py-1 rounded bg-yellow-50">⭐ Подсказки: {hintAllowance}</div>
             <button id="open-shop-btn" className="text-sm px-2 py-1 rounded bg-gray-100" onClick={openShop}>Магазин</button>
           </div>
@@ -187,10 +187,10 @@ export function App() {
             </div>
           )}
           <button className="w-full max-w-md py-4 text-lg rounded bg-blue-600 text-white" onClick={onFindGame}>
-            Найти игру
+            Многопользовательская игра
           </button>
           <button className="w-full max-w-md py-4 text-lg rounded bg-indigo-600 text-white" onClick={onSoloGame}>
-            Соло режим
+            Одиночная игра
           </button>
           {!verified && <div className="text-sm text-gray-500">Инициализация...</div>}
         </div>
