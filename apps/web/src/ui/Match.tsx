@@ -329,7 +329,46 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
             {Math.ceil(remainingMs / 1000)}с
           </div>
         )}
+
+        {/* Placeholder inside header to keep height when timer is not visible */}
+        {(!overlayActive || remainingMs === undefined || !statusText) && (
+          <div
+            className="
+              font-mono
+              text-sm sm:text-base
+              px-3 py-1
+              rounded-full
+              bg-gradient-to-br from-indigo-500 to-indigo-600
+              shadow-[0_8px_20px_-4px_rgba(99,102,241,0.5)]
+              border border-indigo-400/40
+              invisible
+            "
+            aria-hidden
+          >
+            {Math.ceil((remainingMs ?? 0) / 1000)}с?
+          </div>
+        )}
       </div>
+
+        {/* Placeholder to stabilize header height when timer is hidden */}
+        {(!overlayActive || remainingMs === undefined || !statusText) && (
+          <div
+            className="
+              font-mono
+              text-sm sm:text-base
+              px-3 py-1
+              rounded-full
+              bg-gradient-to-br from-indigo-500 to-indigo-600
+              shadow-[0_8px_20px_-4px_rgba(99,102,241,0.5)]
+              border border-indigo-400/40
+              hidden
+            "
+            aria-hidden
+            title=""
+          >
+            {Math.ceil((remainingMs ?? 0) / 1000)}�?
+          </div>
+        )}
 
 
       {/* Board */}
