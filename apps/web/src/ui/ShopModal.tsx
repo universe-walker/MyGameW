@@ -97,37 +97,152 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center" onClick={onClose}>
-      <div className="bg-white rounded p-4 w-80" onClick={(e) => e.stopPropagation()}>
-        <div className="text-lg font-semibold mb-2">Покупки за Звезды</div>
-        <div className="space-y-2">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div 
+      className="
+        bg-gradient-to-br from-white to-gray-50
+        rounded-2xl 
+        p-6 
+        w-full max-w-md
+        shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25)]
+        border border-gray-200
+      " 
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Заголовок */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="
+          w-12 h-12
+          bg-gradient-to-br from-yellow-400 to-orange-500
+          rounded-full
+          flex items-center justify-center
+          text-2xl
+          shadow-lg
+        ">
+          🛒
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Магазин подсказок</h2>
+          <p className="text-sm text-gray-500">Покупки за Звезды ⭐</p>
+        </div>
+      </div>
+  
+      {/* Список товаров */}
+      <div className="space-y-3 mb-6">
+        {/* Товар 1 */}
+        <div className="
+          bg-white
+          rounded-xl
+          p-4
+          border-2 border-gray-100
+          hover:border-orange-200
+          transition-all duration-300
+          shadow-sm
+        ">
           <div className="flex items-center justify-between">
-            <div>Открыть 1 букву</div>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💡</span>
+              <div>
+                <div className="font-semibold text-gray-800">Открыть 1 букву</div>
+                <div className="text-xs text-gray-500">Цена: 10 ⭐</div>
+              </div>
+            </div>
             <button
-              className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+              className="
+                px-5 py-2.5
+                rounded-full
+                bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB]
+                shadow-[0_8px_15px_-3px_rgba(46,134,171,0.4)]
+                text-white font-semibold text-sm
+                transition-all duration-300 ease-in-out
+                hover:translate-y-[2px] hover:shadow-none
+                active:opacity-50
+                disabled:opacity-50 disabled:cursor-not-allowed
+                cursor-pointer
+              "
               onClick={() => buy(1)}
               disabled={pending}
             >
               Купить
             </button>
           </div>
+        </div>
+  
+        {/* Товар 2 */}
+        <div className="
+          bg-white
+          rounded-xl
+          p-4
+          border-2 border-gray-100
+          hover:border-orange-200
+          transition-all duration-300
+          shadow-sm
+        ">
           <div className="flex items-center justify-between">
-            <div>Открыть 2 буквы</div>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💡💡</span>
+              <div>
+                <div className="font-semibold text-gray-800">Открыть 2 буквы</div>
+                <div className="text-xs text-gray-500">Цена: 18 ⭐</div>
+              </div>
+            </div>
             <button
-              className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+              className="
+                px-5 py-2.5
+                rounded-full
+                bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB]
+                shadow-[0_8px_15px_-3px_rgba(46,134,171,0.4)]
+                text-white font-semibold text-sm
+                transition-all duration-300 ease-in-out
+                hover:translate-y-[2px] hover:shadow-none
+                active:opacity-50
+                disabled:opacity-50 disabled:cursor-not-allowed
+                cursor-pointer
+              "
               onClick={() => buy(2)}
               disabled={pending}
             >
               Купить
             </button>
           </div>
-          {error && <div className="text-sm text-red-600">{error}</div>}
         </div>
-        <button className="mt-4 w-full py-2 rounded bg-gray-200" onClick={onClose} disabled={pending}>
-          Закрыть
-        </button>
+  
+        {/* Ошибка */}
+        {error && (
+          <div className="
+            bg-red-50 
+            border-l-4 border-red-500 
+            rounded-lg 
+            p-3
+            flex items-center gap-2
+          ">
+            <span className="text-xl">⚠️</span>
+            <div className="text-sm text-red-700">{error}</div>
+          </div>
+        )}
       </div>
+  
+      {/* Кнопка закрыть */}
+      <button 
+        className="
+          w-full
+          py-3
+          rounded-xl
+          bg-gray-100
+          text-gray-700
+          font-medium
+          transition-all duration-200
+          hover:bg-gray-200
+          active:opacity-50
+          disabled:opacity-50 disabled:cursor-not-allowed
+        " 
+        onClick={onClose} 
+        disabled={pending}
+      >
+        Закрыть
+      </button>
     </div>
+  </div>
   );
 }
 
