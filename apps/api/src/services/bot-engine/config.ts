@@ -36,7 +36,9 @@ export class BotEngineConfig {
     this.revealMs = this.int('REVEAL_MS', 2500);
     this.superWaitMs = this.int('SUPER_WAIT_MS', 12000);
     this.debugAnswer = this.bool('DEBUG_ANSWER', false);
-    this.defaultMinHumans = this.int('DEFAULT_MIN_HUMANS', 3);
+    // If explicitly allowed, enable 2-player multiplayer by default
+    const allow2p = this.bool('ALLOW_TWO_PLAYER_MULTI', false);
+    this.defaultMinHumans = allow2p ? 2 : this.int('DEFAULT_MIN_HUMANS', 3);
     this.defaultAutoBots = this.int('DEFAULT_AUTO_BOTS', 0);
     this.blitzEnabled = this.bool('BLITZ_ENABLED', true);
     this.blitzRounds = String(this.env.BLITZ_ROUNDS || '2')

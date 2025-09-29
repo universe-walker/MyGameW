@@ -98,7 +98,10 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const roomId = crypto.randomUUID();
     const now = Date.now();
     // Default meta for multiplayer rooms
-    const minHumans = Number(process.env.DEFAULT_MIN_HUMANS || 3);
+    const allow2p = String(process.env.ALLOW_TWO_PLAYER_MULTI || '')
+      .toLowerCase();
+    const allow2pBool = ['1', 'true', 'yes', 'on', 'y'].includes(allow2p);
+    const minHumans = allow2pBool ? 2 : Number(process.env.DEFAULT_MIN_HUMANS || 3);
     const autoBots = Number(process.env.DEFAULT_AUTO_BOTS || 0);
     await this.redis.setRoomMeta(roomId, { createdAt: now, solo: false, botCount: 0, minHumans, autoBots });
     await this.redis.touchRoom(roomId);
