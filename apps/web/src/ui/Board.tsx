@@ -116,46 +116,66 @@ export function Board({ roomId, board, canPick, round = 1 }: BoardProps) {
 
   return (
     <div
-      className="grid gap-2 sm:gap-3"
-      style={{ gridTemplateColumns: `repeat(${grid.cats.length}, minmax(0, 1fr))` }}
-    >
-      {grid.cats.map((c, i) => (
-        <div key={c} className="flex flex-col gap-2 sm:gap-3">
-          <div
-            ref={(el) => (headerRefs.current[i] = el)}
-            className="rounded bg-indigo-900 text-white text-center font-semibold flex items-center justify-center px-2 py-2 overflow-hidden whitespace-normal break-normal leading-tight"
-            style={{
-              height: headerHeight || undefined,
-              fontSize: headerFontSizes[i] ? `${headerFontSizes[i]}px` : undefined,
-            }}
-          >
-            {c}
-          </div>
-          {grid.costs.map((cost) => {
-            const cat = board.find((bc) => bc.title === c);
-            const available = !!cat?.values.includes(cost);
-            const isUsed = !available;
-            const disabled = !canPick || isUsed;
-            const cls = isUsed
-              ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-              : canPick
-              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-              : 'bg-gray-300 text-gray-600 cursor-not-allowed';
-            const displayValue = (round >= 2 ? cost * 2 : cost);
-            return (
-              <button
-                key={`${c}-${cost}`}
-                className={`rounded py-3 sm:py-4 text-base sm:text-lg disabled:opacity-60 ${cls}`}
-                disabled={disabled}
-                onClick={() => onPickCell(c, cost)}
-                title={canPick ? 'Выбрать вопрос' : 'Сейчас выбор недоступен'}
-              >
-                {displayValue}
-              </button>
-            );
-          })}
+    className="grid gap-2 sm:gap-3"
+    style={{ gridTemplateColumns: `repeat(${grid.cats.length}, minmax(0, 1fr))` }}
+  >
+    {grid.cats.map((c, i) => (
+      <div key={c} className="flex flex-col gap-2 sm:gap-3">
+        {/* Заголовок категории */}
+        <div
+          ref={(el) => (headerRefs.current[i] = el)}
+          className="
+            rounded-xl
+            bg-gradient-to-br from-indigo-800 to-indigo-900
+            text-white text-center font-bold
+            flex items-center justify-center
+            px-2 py-3
+            overflow-hidden whitespace-normal break-normal leading-tight
+            shadow-lg
+            border-2 border-indigo-700
+          "
+          style={{
+            height: headerHeight || undefined,
+            fontSize: headerFontSizes[i] ? `${headerFontSizes[i]}px` : undefined,
+          }}
+        >
+          {c}
         </div>
-      ))}
-    </div>
+  
+        {/* Ячейки с очками */}
+        {grid.costs.map((cost) => {
+          const cat = board.find((bc) => bc.title === c);
+          const available = !!cat?.values.includes(cost);
+          const isUsed = !available;
+          const disabled = !canPick || isUsed;
+          const displayValue = (round >= 2 ? cost * 2 : cost);
+  
+          return (
+            <button
+              key={`${c}-${cost}`}
+              className={`
+                rounded-xl
+                py-4 sm:py-5
+                text-lg sm:text-xl font-bold
+                transition-all duration-300 ease-in-out
+                ${isUsed 
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                  : canPick
+                  ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-[0_8px_20px_-4px_rgba(99,102,241,0.5)] hover:translate-y-[-2px] hover:shadow-[0_12px_25px_-4px_rgba(99,102,241,0.6)] active:translate-y-[1px] active:shadow-[0_4px_10px_-2px_rgba(99,102,241,0.4)]'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }
+                disabled:opacity-60
+              `}
+              disabled={disabled}
+              onClick={() => onPickCell(c, cost)}
+              title={canPick ? 'Выбрать вопрос' : 'Сейчас выбор недоступен'}
+            >
+              {displayValue}
+            </button>
+          );
+        })}
+      </div>
+    ))}
+  </div>
   );
 }
