@@ -70,10 +70,19 @@ describe('Controls masked input', () => {
     expect(onAnswer).toHaveBeenCalledWith('hel-lo');
   });
 
+  it('prevents typing when mask has no hidden placeholders', async () => {
+    useGameStore.setState({ answerMask: 'done', answerLen: 4 } as any);
+    renderControls();
+    const display = screen.getByTestId('mask-display');
+    await userEvent.click(display);
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement | null;
+    expect(input?.maxLength).toBe(0);
+    await userEvent.type(display, 'abc');
+    expect(display.textContent).toBe('done');
+  });
   it('shows near-miss message when nearMissAt is set and input is empty', async () => {
     useGameStore.setState({ answerMask: '***', nearMissAt: Date.now() } as any);
     renderControls();
-    const el = document.querySelector('div.text-amber-700');
-    expect(!!el).toBe(true);
+    expect(screen.getByText(/ошибка/i)).toBeInTheDocument();
   });
 });

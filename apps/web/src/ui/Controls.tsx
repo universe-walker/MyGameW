@@ -16,6 +16,7 @@ export type ControlsProps = {
 
 export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswer, mode, paused = false, showMeta = true }: ControlsProps) {
   const mask = useGameStore((s) => s.answerMask);
+  const answerLen = useGameStore((s) => s.answerLen);
   const nearMissAt = useGameStore((s) => s.nearMissAt);
   const roomId = useGameStore((s) => s.roomId);
   const canRevealHint = useGameStore((s) => s.canRevealHint);
@@ -26,11 +27,14 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
   const openShop = useUiHome((s) => s.openShop);
 
   const slots = useMemo(() => {
-    if (!mask) return 64; // fallback when mask not yet received
-    let c = 0;
-    for (const ch of mask) if (ch === '*') c++;
-    return c || 64;
-  }, [mask]);
+    if (mask) {
+      let c = 0;
+      for (const ch of mask) if (ch === '*') c++;
+      return c;
+    }
+    if (answerLen > 0) return answerLen;
+    return 64; // fallback when mask not yet received
+  }, [mask, answerLen]);
 
   useEffect(() => {
     if (isMyTurnToAnswer) {
@@ -120,7 +124,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
     <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
       {isMyTurnToAnswer && (
   <div className="flex items-start md:items-center gap-3 sm:gap-4 w-full">
-    <div className="flex-1">
+    <div className="flex-1 min-w-0">
       {/* Hidden input (screen reader only). Click below to focus it. */}
       <input
         ref={hiddenInputRef}
@@ -130,6 +134,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
         autoCorrect="off"
         autoFocus
         className="sr-only"
+        maxLength={Math.max(0, slots)}
         value={typed}
         onChange={onHiddenChange}
         onKeyDown={(e) => {
@@ -142,6 +147,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
         data-testid="mask-display"
         className="
           px-4 py-3
+          min-w-0 w-full max-w-full
           rounded-2xl
           bg-white
           text-slate-900
