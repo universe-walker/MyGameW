@@ -235,26 +235,67 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
       {showMeta && mode === 'solo' && !paused && (
         <button
           onClick={onPause}
-          className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
+          className="
+            px-4 py-2
+            rounded-[50px]
+            text-sm md:text-base whitespace-nowrap
+            bg-gradient-to-br from-[#F5B041] to-[#F18F01]
+            text-white font-medium
+            shadow-[0_8px_15px_-3px_rgba(241,143,1,0.4)]
+            transition-all duration-300 ease-in-out
+            hover:translate-y-[2px] hover:shadow-none
+            active:opacity-50
+            cursor-pointer
+            font-['Dosis',sans-serif]
+          "
+          title='Поставить игру на паузу'
         >
           Пауза
         </button>
       )}
+
       {showMeta && mode === 'solo' && paused && (
         <button
           onClick={onResume}
-          className="px-3 py-2 rounded bg-gray-200 text-sm md:text-base whitespace-nowrap"
+          className="
+            px-4 py-2
+            rounded-[50px]
+            text-sm md:text-base whitespace-nowrap
+            bg-gradient-to-br from-emerald-400 to-emerald-600
+            text-white font-medium
+            shadow-[0_12px_22px_-6px_rgba(16,185,129,0.45)]
+            transition-all duration-300 ease-in-out
+            hover:translate-y-[2px] hover:shadow-[0_16px_28px_-8px_rgba(16,185,129,0.55)]
+            active:opacity-50
+            cursor-pointer
+            font-['Dosis',sans-serif]
+          "
+          title='Продолжить игру'
         >
           Продолжить
         </button>
       )}
+
       {showMeta && (
-      <button
-        onClick={onLeave}
-        className="ml-auto px-3 py-2 rounded bg-red-100 text-red-700 text-sm md:text-base whitespace-nowrap"
-      >
-        Выйти
-      </button>
+        <button
+          onClick={onLeave}
+          className="
+            ml-auto px-4 py-2
+            rounded-[50px]
+            text-sm md:text-base whitespace-nowrap
+            bg-gradient-to-br from-[#feb692] to-[#ea5455]
+            text-white font-medium
+            shadow-[0_20px_30px_-6px_rgba(238,103,97,0.5)]
+            transition-all duration-300 ease-in-out
+            hover:translate-y-[2px] hover:shadow-none
+            active:opacity-50
+            cursor-pointer
+            font-['Dosis',sans-serif]
+          "
+          title='Выйти из игры'
+        >
+          Выйти
+        </button>
       )}
     </div>
   );
