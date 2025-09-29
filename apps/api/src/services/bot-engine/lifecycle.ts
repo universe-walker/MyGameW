@@ -33,8 +33,6 @@ export function stopGame(engine: BotEngineService, roomId: string): void {
   }
 
   engine.rooms.delete(roomId);
-  engine.botPlayerIds.delete(roomId);
-  engine.nextBotId.delete(roomId);
   engine.telemetry.matchCompleted(roomId, runtime.mode);
 }
 

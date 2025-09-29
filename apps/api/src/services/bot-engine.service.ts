@@ -47,8 +47,6 @@ import type { Phase, RoomRuntime, GameMode } from './bot-engine/types';
 export class BotEngineService {
   public server: Server | null = null;
   public readonly rooms = new Map<string, RoomRuntime>();
-  public readonly botPlayerIds = new Map<string, Map<string, number>>();
-  public readonly nextBotId = new Map<string, number>();
   public readonly config: BotEngineConfig;
   private rng: () => number;
 
