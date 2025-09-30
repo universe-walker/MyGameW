@@ -238,13 +238,13 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
     lastCellCountRef.current = currentCellCount;
   }, [phase, currentBoardSig, currentCellCount, startOverlay, roundNumber]);
 
-  // If server signals the end of the game (final), show Game Over (solo only)
+  // If server signals the end of the game (final), show Game Over (solo and multi)
   useEffect(() => {
-    if (mode === 'solo' && phase === 'final') {
+    if (phase === 'final') {
       setOverlayActive(false);
       setGameOverOpen(true);
     }
-  }, [mode, phase]);
+  }, [phase]);
 
   return (
     <div className="flex flex-col gap-3 min-h-screen overflow-x-hidden">
@@ -471,8 +471,8 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         </div>
       )}
 
-      {/* Game Over for Solo after Round 2 */}
-      {!lobby && mode === 'solo' && gameOverOpen && (
+      {/* Game Over after Round 2 (solo and multi) */}
+      {!lobby && gameOverOpen && (
         <GameOverModal
           open={true}
           players={players}
