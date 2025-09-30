@@ -269,6 +269,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
       
       {/* Header: active players + timer (стиль как у кнопок) */}
+      {!lobby && (<>
       <div
         className="
           flex items-center justify-between
@@ -371,6 +372,8 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         )}
 
 
+        </>)}
+
       {/* Board */}
       {showBoard && (
         <div ref={boardWrapRef} className="w-full overflow-x-auto">
@@ -380,6 +383,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
       {/* Question area keeps at least the last measured board height
           to avoid vertical jumps when switching phases. */}
+      {!lobby && (
       <div
         ref={questionAreaRef}
         style={{ minHeight: !showBoard ? (boardHeight || 300) : undefined, transition: 'min-height 150ms ease' }}
@@ -426,6 +430,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
           />
         </div>
       </div>
+      )}
 
       {/* Meta controls (pause/resume/leave) below */}
       <Controls
@@ -438,15 +443,17 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         paused={paused}
       />
 
+      {!lobby && (
       <Scoreboard
         players={players}
         botStatuses={botStatuses}
         isMyTurnToAnswer={isMyTurnToAnswer}
         scores={scores}
       />
+      )}
 
       {/* Round overlay */}
-      {overlayActive && !gameOverOpen && (
+      {!lobby && overlayActive && !gameOverOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-auto">
           <div className="absolute inset-0 bg-black/40" />
           <div
@@ -465,7 +472,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
       )}
 
       {/* Game Over for Solo after Round 2 */}
-      {mode === 'solo' && gameOverOpen && (
+      {!lobby && mode === 'solo' && gameOverOpen && (
         <GameOverModal
           open={true}
           players={players}
