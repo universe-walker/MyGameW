@@ -97,25 +97,47 @@ export const useGameStore = create<State>((set) => ({
     lobbyUntil: info?.until,
   }),
   setPhase: (phase, until, activePlayerId, question, scores, extras) =>
-    set((s) => ({
-      phase,
-      until,
-      activePlayerId,
-      question,
-      scores: scores ?? s.scores,
-      variant: extras?.variant,
-      blitzIndex: extras?.blitz?.index,
-      blitzTotal: extras?.blitz?.total,
-      // Reset pause bookkeeping on every new phase payload
-      paused: false,
-      pauseOffsetMs: 0,
-      pauseStartedAt: null,
-    })),
+    set((s) => {
+      const isAnswerWait = phase === 'answer_wait';
+      const activeChanged = activePlayerId !== s.activePlayerId;
+      const questionChanged =
+        (!!question && (!!s.question ? (question.category !== s.question.category || question.value !== s.question.value) : true)) ||
+        (!question && !!s.question);
+      // Clear transient error banners when turn/question changes or leaving answer phase
+      const shouldClearNearMiss = !isAnswerWait || activeChanged || questionChanged;
+      const next: Partial<State> = {
+        phase,
+        until,
+        activePlayerId,
+        question,
+        scores: scores ?? s.scores,
+        variant: extras?.variant,
+        blitzIndex: extras?.blitz?.index,
+        blitzTotal: extras?.blitz?.total,
+        // Reset pause bookkeeping on every new phase payload
+        paused: false,
+        pauseOffsetMs: 0,
+        pauseStartedAt: null,
+      };
+      if (shouldClearNearMiss) {
+        (next as any).nearMissAt = null;
+        (next as any).hintErrorMsg = null;
+        (next as any).hintErrorAt = null;
+      }
+      return next as State;
+    }),
   setBoard: (categories) => set({ boardCategories: categories }),
   setBotStatus: (playerId, status) => set((s) => ({ botStatuses: { ...s.botStatuses, [playerId]: status } })),
   setRevealAnswer: (text) => set({ revealAnswer: text }),
   setAnswerMask: (mask, len) =>
-    set((s) => ({ answerMask: mask, answerLen: typeof len === 'number' ? len : s.answerLen })),
+    set((s) => ({
+      answerMask: mask,
+      answerLen: typeof len === 'number' ? len : s.answerLen,
+      // Clear stale near-miss and hint errors whenever a new/updated mask arrives
+      nearMissAt: null,
+      hintErrorMsg: null,
+      hintErrorAt: null,
+    })),
   setCanRevealHint: (v) => set({ canRevealHint: v }),
   setHintError: (msg) => set({ hintErrorMsg: msg, hintErrorAt: msg ? Date.now() : null }),
   setNearMiss: () => set({ nearMissAt: Date.now() }),
