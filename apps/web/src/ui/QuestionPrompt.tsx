@@ -4,10 +4,12 @@ import type { ReactNode } from 'react';
 
 export type QuestionPromptProps = {
   question?: CurrentQuestion;
+  // Current round number (1-based). In round >= 2, values are doubled.
+  round?: number;
   children?: ReactNode;
 };
 
-export function QuestionPrompt({ question, children }: QuestionPromptProps) {
+export function QuestionPrompt({ question, round = 1, children }: QuestionPromptProps) {
   const reveal = useGameStore((s) => s.revealAnswer);
   if (!question && !reveal) return null;
   return (
@@ -15,7 +17,7 @@ export function QuestionPrompt({ question, children }: QuestionPromptProps) {
       {question && (
         <>
           <div className="text-xs text-yellow-700">
-            {question.category} — {question.value}
+            {question.category} — {round >= 2 ? question.value * 2 : question.value}
           </div>
           <div className="mt-1 text-lg">{question.prompt}</div>
         </>

@@ -384,7 +384,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
         ref={questionAreaRef}
         style={{ minHeight: !showBoard ? (boardHeight || 300) : undefined, transition: 'min-height 150ms ease' }}
       >
-        <QuestionPrompt question={question} />
+        <QuestionPrompt question={question} round={Math.max(1, roundNumber || 1)} />
 
         {/* Options under the question (not inside the yellow card) */}
         {isMyTurnToAnswer && hasOptions && (
