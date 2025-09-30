@@ -271,7 +271,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
         Ответить
       </button>
 
-      {canRevealHint ? (
+      {mode === 'solo' && (canRevealHint ? (
         <button
           onClick={onHintClick}
           className={`
@@ -309,7 +309,7 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
         >
           Купить подсказки
         </button>
-      )}
+      ))}
     </div>
   </div>
 )}

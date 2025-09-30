@@ -36,6 +36,14 @@ export function App() {
 
   const { connect, disconnect, getSocket } = useSocket();
 
+  // Close home-only modals when a match starts (solo or multiplayer)
+  useEffect(() => {
+    if (roomId) {
+      try { closeShop(); } catch {}
+      try { closeAchievements(); } catch {}
+    }
+  }, [roomId, closeShop, closeAchievements]);
+
   const verify = useMutation({
     mutationFn: async (initDataRaw: string) => {
       const res = await fetchApi(`/auth/telegram/verify`, {
@@ -159,8 +167,8 @@ export function App() {
 
   return (
     <div className="min-h-full flex flex-col p-4 bg-[#F5F5F5]">
-      {/* AppBar (hidden for solo game page) */}
-      {!(roomId && mode === 'solo') && (
+      {/* AppBar (hidden during any active match) */}
+      {!roomId && (
         <div className="w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xl font-bold text-center sm:text-left">MyGame</div>
           <div className="w-full sm:w-auto flex flex-wrap items-center justify-center sm:justify-end gap-2">
