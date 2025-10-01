@@ -37,7 +37,10 @@ function getFallbackInitData(): { initData: string; parsed: URLSearchParams } | 
   const tgData = hashParams.get('tgWebAppData');
   if (!tgData) return null;
   try {
-    const initData = decodeURIComponent(tgData);
+    // Do NOT decode here. The raw Telegram initData is a percent-encoded
+    // ASCII-safe query string. Keeping it encoded avoids non-ASCII characters
+    // in headers (e.g., Cyrillic names) which iOS Safari rejects.
+    const initData = tgData;
     const parsed = new URLSearchParams(initData);
     cachedFallback = { initData, parsed };
     return cachedFallback;
