@@ -47,6 +47,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.client.on('ready', () => {
       // eslint-disable-next-line no-console
       console.log('[redis] ready');
+      // Log replication role to detect accidental read-only replicas
+      // (helps diagnose intermittent READONLY errors in production)
+      void this.logReplicationInfo('on-ready');
     });
     this.client.on('reconnecting', (time: number) => {
       // eslint-disable-next-line no-console
@@ -59,6 +62,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     this.client.on('error', (err) => {
       // eslint-disable-next-line no-console
       console.error('[redis] error:', err?.message || err);
+      // If Redis reports READONLY, log current role details for troubleshooting
+      if (err && typeof (err as any).message === 'string' && (err as any).message.includes('READONLY')) {
+        void this.logReplicationInfo('on-error-readonly');
+      }
     });
   }
 
@@ -296,6 +303,31 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       ]);
     } finally {
       if (timer) clearTimeout(timer);
+    }
+  }
+
+  // Diagnostics: log replication role + endpoint we are connected to
+  private async logReplicationInfo(source: string) {
+    try {
+      const info = await this.withTimeout(this.client.info('replication'), 'info replication');
+      const lines = String(info).split(/\r?\n/);
+      const map = new Map<string, string>();
+      for (const line of lines) {
+        const idx = line.indexOf(':');
+        if (idx > 0) map.set(line.slice(0, idx), line.slice(idx + 1));
+      }
+      const role = map.get('role') || 'unknown';
+      const masterHost = map.get('master_host');
+      const masterPort = map.get('master_port');
+      const connectedSlaves = map.get('connected_slaves');
+      const { host, port } = (this.client as any).options || {};
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[redis] ${source}: role=${role} endpoint=${host ?? '?'}:${port ?? '?'} master=${masterHost ?? '-'}:${masterPort ?? '-'} slaves=${connectedSlaves ?? '-'}`,
+      );
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[redis] failed to fetch replication info:', (e as any)?.message || e);
     }
   }
 }
