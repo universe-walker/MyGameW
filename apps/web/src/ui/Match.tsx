@@ -94,6 +94,14 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
   const canPick = phase === 'prepare' && activePlayerId === myId;
   const showBoard = phase === 'prepare' && !lobby;
 
+  // Track the picker (who selected the question) to gate buzzer visibility
+  const pickerIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (phase === 'prepare' && typeof activePlayerId === 'number') {
+      pickerIdRef.current = activePlayerId;
+    }
+  }, [phase, activePlayerId]);
+
   // Keep layout stable between phases: remember board height and reuse it
   const boardWrapRef = useRef<HTMLDivElement | null>(null);
   const questionAreaRef = useRef<HTMLDivElement | null>(null);
@@ -311,6 +319,17 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
               ⏸ Пауза
             </span>
           )}
+          {mode === 'multi' && phase === 'buzzer_window' && (pickerIdRef.current == null || myId !== pickerIdRef.current) && (
+            <button
+              className="px-3 py-2 rounded bg-rose-600 text-white text-sm md:text-base"
+              onClick={() => {
+                const s = getSocket();
+                if (s && roomId) s.emit('buzzer:press', { roomId });
+              }}
+            >
+              Взять вопрос
+            </button>
+          )}
         </div>
 
         {/* Таймер — моноширинная капсула в индиго-градиенте */}
@@ -407,7 +426,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
 
         {/* Inline answer input under the question (no meta buttons) */}
         <div className="mt-2">
-          {mode === 'multi' && phase === 'buzzer_window' && (
+          {mode === 'multi' && phase === 'buzzer_window' && (pickerIdRef.current == null || myId !== pickerIdRef.current) && false && (
             <button
               className="px-3 py-2 rounded bg-rose-600 text-white text-sm md:text-base"
               onClick={() => {

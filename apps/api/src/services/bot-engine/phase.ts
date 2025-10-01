@@ -161,6 +161,42 @@ export function advanceAfterScore(engine: BotEngineService, roomId: string): voi
   }
 
   if (currentAnswerIdx < orderLength - 1) {
+    // If the picker just failed in multi mode, open a buzzer window for others
+    if ((runtime.mode === 'multi') && (currentAnswerIdx === startIdx)) {
+      runtime.activePlayerId = null;
+      engine.goto(roomId, 'buzzer_window', Date.now() + engine.config.buzzerWindowMs);
+      engine.scheduleBotBuzz(roomId);
+      engine.timers.set(roomId, 'phase_buzzer_window', engine.config.buzzerWindowMs, () => {
+        const cur = engine.rooms.get(roomId);
+        if (!cur || cur.phase !== 'buzzer_window') return;
+        if (cur.activePlayerId != null) return; // somebody buzzed -> handled by their flow
+        const cat = cur.question?.category ?? 'unknown';
+        const val = cur.question?.value ?? 0;
+        void engine.loadAnswer(cat, val).then((text) => {
+          try {
+            engine.server?.to(roomId).emit('answer:reveal', { roomId, category: cat, value: val, text } as any);
+          } catch (error) {
+            void error;
+          }
+        });
+        engine.goto(roomId, 'round_end', Date.now() + engine.config.revealMs);
+        engine.timers.set(roomId, 'phase_round_end', engine.config.revealMs, () => {
+          const nextRuntime = engine.rooms.get(roomId);
+          if (!nextRuntime?.running) return;
+          nextRuntime.question = undefined;
+          nextRuntime.questionId = undefined;
+          nextRuntime.questionOptions = undefined;
+          nextRuntime.isSuperQuestion = undefined;
+          nextRuntime.activePlayerId = null;
+          nextRuntime.pickerIndex = engine.nextIndexInOrder(roomId, startIdx);
+          void engine.ensureBoard(roomId).then(() => engine.emitBoardState(roomId));
+          void engine.schedulePrepare(roomId);
+        });
+      });
+      return;
+    }
+
+    // Otherwise continue to the next answerer sequentially
     runtime.answerIndex = currentAnswerIdx + 1;
     const nextId = engine.getCurrentAnswererId(roomId);
     runtime.activePlayerId = nextId ?? null;

@@ -162,8 +162,8 @@ export class BotEngineService {
       await onBoardPickImpl(this, roomId, categoryTitle, value, pickerId);
       return;
     }
-    // Multi-mode: open buzzer window instead of assigning to picker immediately
-    // This mirrors onBoardPick() with mode-specific branch.
+    // Multi-mode: assign initial answering to the picker; only open buzzer window
+    // after the picker fails or times out.
     const current = this.rooms.get(roomId);
     if (!current || current.phase !== 'prepare') return;
 
@@ -200,36 +200,35 @@ export class BotEngineService {
     await this.ensureOrder(roomId);
     current.questionStartPickerIndex = current.pickerIndex ?? 0;
     current.answerIndex = current.questionStartPickerIndex;
-    current.activePlayerId = null;
+    // Initialize answering flow starting from picker
+    this.timers.clearAll(roomId);
+    await this.ensureOrder(roomId);
+    current.questionStartPickerIndex = current.pickerIndex ?? 0;
+    current.answerIndex = current.questionStartPickerIndex;
+    const answererId = this.getCurrentAnswererId(roomId);
+    current.activePlayerId = answererId ?? null;
 
-    this.goto(roomId, 'buzzer_window', Date.now() + this.config.buzzerWindowMs);
-    this.scheduleBotBuzz(roomId);
-    this.timers.set(roomId, 'phase_buzzer_window', this.config.buzzerWindowMs, () => {
-      const cur = this.rooms.get(roomId);
-      if (!cur || cur.phase !== 'buzzer_window') return;
-      if (cur.activePlayerId != null) return; // someone buzzed -> handled by their flow
-      const cat = cur.question?.category ?? 'unknown';
-      const val = cur.question?.value ?? 0;
-      void this.loadAnswer(cat, val).then((text) => {
-        try {
-          this.server?.to(roomId).emit('answer:reveal', { roomId, category: cat, value: val, text } as any);
-        } catch (error) {
-          void error;
-        }
+    const isBot = typeof answererId === 'number' ? answererId < 0 : false;
+    const waitMs = current.isSuperQuestion
+      ? this.config.superWaitMs
+      : isBot
+      ? this.config.answerWaitBotMs
+      : this.config.answerWaitHumanMs;
+
+    this.goto(roomId, 'answer_wait', Date.now() + waitMs);
+    void this.onEnterAnswerWait(roomId);
+
+    if (isBot && typeof answererId === 'number') {
+      this.scheduleBotThinkAndAnswer(roomId, answererId);
+    } else {
+      this.timers.set(roomId, 'phase_answer_wait', waitMs, () => {
+        const cur = this.rooms.get(roomId);
+        if (!cur || cur.phase !== 'answer_wait' || cur.activePlayerId !== answererId) return;
+        cur.lastAnswerCorrect = false;
+        this.goto(roomId, 'score_apply', Date.now() + this.config.scoreApplyMs);
+        this.timers.set(roomId, 'phase_score_apply', this.config.scoreApplyMs, () => this.advanceAfterScore(roomId));
       });
-      this.goto(roomId, 'round_end', Date.now() + this.config.revealMs);
-      this.timers.set(roomId, 'phase_round_end', this.config.revealMs, () => {
-        const nextRuntime = this.rooms.get(roomId);
-        if (!nextRuntime?.running) return;
-        nextRuntime.question = undefined;
-        nextRuntime.questionOptions = undefined;
-        nextRuntime.isSuperQuestion = undefined;
-        nextRuntime.activePlayerId = null;
-        nextRuntime.pickerIndex = this.nextIndexInOrder(roomId, nextRuntime.questionStartPickerIndex ?? 0);
-        void this.ensureBoard(roomId).then(() => this.emitBoardState(roomId));
-        void this.schedulePrepare(roomId);
-      });
-    });
+    }
   }
 
   async publishBoardState(roomId: string) {
