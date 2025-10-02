@@ -1,7 +1,6 @@
-import { Body, Controller, HttpException, HttpStatus, Optional, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpException, HttpStatus, Optional, Post, Req } from '@nestjs/common';
 import { ZInvoiceCreateReq, ZInvoiceCreateRes } from '@mygame/shared';
 import { PrismaService } from '../services/prisma.service';
-import { TelegramAuthGuard } from './telegram-auth.guard';
 import { z } from 'zod';
 import { TelemetryService } from '../services/telemetry.service';
 
@@ -54,62 +53,6 @@ export class BillingController {
       throw new HttpException(`TG createInvoiceLink error: ${json.description || 'unknown'}`, HttpStatus.BAD_GATEWAY);
     }
     return ZInvoiceCreateRes.parse({ invoiceLink: json.result });
-  }
-
-  // Minimal credit endpoint to update balance after a successful Stars payment in WebApp
-  // NOTE: In production, validate payments via Bot API updates (Stars transactions) and secure payloads.
-  @UseGuards(TelegramAuthGuard)
-  @Post('credit')
-  async credit(@Body() body: unknown, @Req() req?: any) {
-    const z = ZInvoiceCreateReq.pick({ type: true, qty: true });
-    const parsed = z.safeParse(body);
-    if (!parsed.success) {
-      throw new HttpException('Invalid request', HttpStatus.BAD_REQUEST);
-    }
-    const userIdNum = Number(req?.user?.id);
-    if (!Number.isInteger(userIdNum) || userIdNum <= 0) {
-      throw new HttpException('Auth required', HttpStatus.UNAUTHORIZED);
-    }
-    const { type, qty } = parsed.data;
-
-    const userId = BigInt(userIdNum);
-
-    if (!this.prisma) {
-      throw new HttpException('Server misconfigured: no PrismaService', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
-    // Ensure user exists
-    try {
-      await this.prisma.user.upsert({
-        where: { id: userId },
-        update: {},
-        create: {
-          id: userId,
-          firstName: req?.user?.first_name || 'User',
-          username: req?.user?.username ?? null,
-        },
-      });
-    } catch {}
-
-    // Credit hint allowance
-    await this.prisma.userMeta.upsert({
-      where: { userId },
-      update: { hintAllowance: { increment: qty } },
-      create: { userId, hintAllowance: qty, profileScore: 0 },
-    });
-
-    // Log purchase (tgPaymentId placeholder since client-side)
-    await this.prisma.billingPurchase.create({
-      data: {
-        userId,
-        type: 'hint_letter',
-        qty,
-        status: 'paid',
-        tgPaymentId: `webapp:${Date.now()}`,
-      },
-    });
-
-    return { ok: true };
   }
 
   // Secure endpoint for bot to confirm Stars payments server-side
