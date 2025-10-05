@@ -30,6 +30,24 @@ function getHashParams(): URLSearchParams | null {
 let cachedFallback: { initData: string; parsed: URLSearchParams } | null = null;
 export const TELEGRAM_INIT_DATA_TTL_SECONDS = 24 * 60 * 60;
 
+function scrubTgInitDataFromHash() {
+  try {
+    if (typeof window === 'undefined') return;
+    const rawHash = window.location.hash?.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    if (!rawHash) return;
+    const params = new URLSearchParams(rawHash);
+    if (!params.has('tgWebAppData')) return;
+    params.delete('tgWebAppData');
+    const newHash = params.toString();
+    const url = new URL(window.location.href);
+    url.hash = newHash ? `#${newHash}` : '';
+    // Avoid navigation and history pollution; just replace the URL
+    window.history.replaceState(window.history.state, document.title, url.toString());
+  } catch {
+    // best-effort scrub; ignore failures
+  }
+}
+
 function getFallbackInitData(): { initData: string; parsed: URLSearchParams } | null {
   if (cachedFallback) return cachedFallback;
   const hashParams = getHashParams();
@@ -43,6 +61,8 @@ function getFallbackInitData(): { initData: string; parsed: URLSearchParams } | 
     const initData = tgData;
     const parsed = new URLSearchParams(initData);
     cachedFallback = { initData, parsed };
+    // Scrub sensitive init payload from URL hash after parsing
+    scrubTgInitDataFromHash();
     return cachedFallback;
   } catch {
     return null;
