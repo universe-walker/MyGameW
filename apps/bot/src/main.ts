@@ -14,14 +14,20 @@ const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:4000';
 const BILLING_BOT_SECRET = process.env.BILLING_BOT_SECRET || '';
 const BILLING_ALERT_CHAT_ID = process.env.BILLING_ALERT_CHAT_ID || '';
 
+function maskSecret(value: string | undefined | null): string {
+  if (!value) return '⚠️ Missing';
+  const trimmed = value.trim();
+  if (trimmed.length <= 4) return '***';
+  return `***${trimmed.slice(-4)}`;
+}
+
 console.log('🚀 Starting bot...');
-console.log('Environment variables:');
-console.log(`- BOT_TELEGRAM_BOT_TOKEN: ${botToken}`);
+console.log('Environment variables (secrets redacted):');
+console.log(`- BOT_TELEGRAM_BOT_TOKEN: ${maskSecret(botToken)}`);
 console.log(`- WEBAPP_BASE_URL: ${WEBAPP_BASE_URL || '❌ Missing'}`);
 console.log(`- NGROK_HOST: ${NGROK_HOST || '❌ Missing'}`);
 console.log(`- API_BASE_URL: ${API_BASE_URL}`);
-console.log(`- BILLING_BOT_SECRET: ${BILLING_BOT_SECRET ? 'set' : 'missing'}`);
-console.log(`- BILLING_ALERT_CHAT_ID: ${BILLING_ALERT_CHAT_ID ? 'set' : 'missing'}`);
+console.log(`- BILLING_ALERT_CHAT_ID: ${BILLING_ALERT_CHAT_ID ? 'configured' : '⚠️ Missing'}`);
 
 if (!BILLING_BOT_SECRET) {
   console.error('Missing BILLING_BOT_SECRET (required for bot service access)');
