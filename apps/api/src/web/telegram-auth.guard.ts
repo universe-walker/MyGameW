@@ -10,7 +10,15 @@ export class TelegramAuthGuard implements CanActivate {
       | undefined;
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
-    const allowDev = process.env.ALLOW_DEV_NO_TG === '1' || !botToken;
+    const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+    // Dev override is allowed only outside production
+    const rawAllowDev = process.env.ALLOW_DEV_NO_TG === '1';
+    const allowDev = !isProd && rawAllowDev;
+    if (isProd && rawAllowDev) {
+      try {
+        console.warn('[auth] ALLOW_DEV_NO_TG is set but ignored in production');
+      } catch {}
+    }
 
     try {
       // High-level request diagnostics (no secrets)
@@ -23,6 +31,12 @@ export class TelegramAuthGuard implements CanActivate {
         method: req?.method,
       });
     } catch {}
+
+    // Fail closed if bot token is missing (misconfiguration)
+    if (!botToken) {
+      console.error('[auth] Missing TELEGRAM_BOT_TOKEN; rejecting all authenticated requests');
+      throw new UnauthorizedException('Server misconfigured: missing Telegram bot token');
+    }
 
     if (!header) {
       if (allowDev) {

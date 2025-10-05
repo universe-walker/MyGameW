@@ -41,7 +41,15 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   handleConnection(client: Socket) {
     const initDataRaw = client.handshake.auth?.initDataRaw as string | undefined;
     const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
-    const allowDev = process.env.ALLOW_DEV_NO_TG === '1' || !token;
+    const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+    // Dev override is allowed only outside production; missing token must fail closed
+    const rawAllowDev = process.env.ALLOW_DEV_NO_TG === '1';
+    const allowDev = !isProd && rawAllowDev;
+    if (isProd && rawAllowDev) {
+      try {
+        console.warn('[ws] ALLOW_DEV_NO_TG is set but ignored in production');
+      } catch {}
+    }
     const res = initDataRaw ? verifyInitData(initDataRaw, token) : undefined;
     try {
       console.log('[ws] connection attempt', {
@@ -57,6 +65,14 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         ttlSeconds: res?.ttlSeconds,
       });
     } catch {}
+    if (!token) {
+      try {
+        console.error('[ws] Missing TELEGRAM_BOT_TOKEN; rejecting connection');
+      } catch {}
+      client.disconnect(true);
+      return;
+    }
+
     if (!initDataRaw || !(res?.ok)) {
       if (!allowDev) {
         console.warn('[ws] rejecting connection', {

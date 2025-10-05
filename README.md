@@ -53,7 +53,7 @@
 ## Аутентификация через Telegram (REST + WS)
 - REST-эндпоинты `/rooms`, `/rooms/solo`, `/profile` защищены guard'ом и требуют заголовок `X-Telegram-Init-Data`.
   - В проде initData должен валидироваться по `TELEGRAM_BOT_TOKEN`.
-  - В dev (`ALLOW_DEV_NO_TG=1` или если токен не задан) допускается анонимный пользователь `id=0`.
+  - В dev анонимный пользователь `id=0` допустим только при явном `ALLOW_DEV_NO_TG=1` (только вне production).
 - Клиент (web) добавляет заголовок автоматически в `fetchApi`.
 - WebSocket подключение использует `auth.initDataRaw` и также валидируется на сервере.
 
@@ -67,8 +67,8 @@ curl -H "X-Telegram-Init-Data: <raw_query_string_from_telegram>" http://localhos
   - `PORT` — порт API (по умолчанию 4000)
   - `DATABASE_URL` — строка подключения к PostgreSQL
   - `REDIS_URL` — строка подключения к Redis
-  - `TELEGRAM_BOT_TOKEN` — токен бота (обязателен в прод)
-  - `ALLOW_DEV_NO_TG` — `1` разрешает доступ без Telegram initData в dev
+  - `TELEGRAM_BOT_TOKEN` — токен бота (обязателен; при отсутствии REST/WS отклоняют запросы)
+  - `ALLOW_DEV_NO_TG` — `1` разрешает доступ без Telegram initData в dev; игнорируется в production
   - Параметры движка (опционально): `PREPARE_HUMAN_MS`, `PREPARE_BOT_MIN_MS`, `PREPARE_BOT_MAX_MS`, `ANSWER_WAIT_HUMAN_MS`, `ANSWER_WAIT_BOT_MS`, `SCORE_APPLY_MS`, `REVEAL_MS`, `SUPER_WAIT_MS`, `BLITZ_*`, `SOLO_DEFAULT_BOTS` и т.д. (см. `apps/api/src/services/bot-engine.service.ts`).
 - Web (`apps/web/.env`):
   - `VITE_API_BASE_URL` — базовый URL API
@@ -99,7 +99,7 @@ curl -H "X-Telegram-Init-Data: <raw_query_string_from_telegram>" http://localhos
 - `POST /rooms/solo` — создать solo-комнату
 - `GET /profile` — профиль авторизованного пользователя
 
-> Примечание: `/rooms`, `/rooms/solo`, `/profile` требуют заголовок `X-Telegram-Init-Data` (кроме dev-режима).
+> Примечание: `/rooms`, `/rooms/solo`, `/profile` требуют заголовок `X-Telegram-Init-Data` (кроме dev-режима при явно включённом `ALLOW_DEV_NO_TG`).
 
 ## Замечания по продакшену
 - Ограничьте CORS/WS origin для боевой среды (сейчас в коде разрешён `origin: true`).
@@ -111,7 +111,7 @@ curl -H "X-Telegram-Init-Data: <raw_query_string_from_telegram>" http://localhos
 - Frontend: `pnpm --filter @mygame/web test`
 
 ## Частые проблемы
-- Нет `TELEGRAM_BOT_TOKEN` в проде → REST/WS будет отклонять запросы без `ALLOW_DEV_NO_TG`.
+- Нет `TELEGRAM_BOT_TOKEN` → REST/WS отклоняют запросы. Переменная `ALLOW_DEV_NO_TG` в production игнорируется.
 - HMR через ngrok: обновите `NGROK_HOST` в окружении (см. `apps/web/vite.config.ts`).
 - Большие сиды: запуск `prisma db seed` может занять время; убедитесь, что `DATABASE_URL` валиден и БД доступна.
 
