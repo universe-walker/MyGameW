@@ -24,8 +24,11 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { BotEngineService } from '../services/bot-engine.service';
 import { parseInitData, verifyInitData } from '../services/telegram-auth.util';
+import { getAllowedOrigins, warnIfProdAndNoOrigins } from '../config/cors.util';
+const WS_ALLOWED_ORIGINS = getAllowedOrigins();
+warnIfProdAndNoOrigins(WS_ALLOWED_ORIGINS);
 
-@WebSocketGateway({ namespace: '/game', cors: { origin: true, credentials: true } })
+@WebSocketGateway({ namespace: '/game', cors: { origin: WS_ALLOWED_ORIGINS, credentials: true } })
 export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;

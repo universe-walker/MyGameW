@@ -26,6 +26,9 @@
      REDIS_URL=redis://localhost:6379
      # Прод: обязателен — токен бота Telegram для валидации initData
      TELEGRAM_BOT_TOKEN=
+     # CORS: явный allowlist, например домен WebApp Telegram и др. доверенные
+     # Пример: https://your-webapp.example.com,https://another.trusted.app
+     ALLOWED_ORIGINS=
      # Dev-режим: позволить работу без Telegram initData
      ALLOW_DEV_NO_TG=1
      ```
@@ -67,6 +70,7 @@ curl -H "X-Telegram-Init-Data: <raw_query_string_from_telegram>" http://localhos
   - `PORT` — порт API (по умолчанию 4000)
   - `DATABASE_URL` — строка подключения к PostgreSQL
   - `REDIS_URL` — строка подключения к Redis
+  - `ALLOWED_ORIGINS` — список разрешённых Origin (через запятую), например домен Telegram WebApp и другие доверенные
   - `TELEGRAM_BOT_TOKEN` — токен бота (обязателен; при отсутствии REST/WS отклоняют запросы)
   - `ALLOW_DEV_NO_TG` — `1` разрешает доступ без Telegram initData в dev; игнорируется в production
   - Параметры движка (опционально): `PREPARE_HUMAN_MS`, `PREPARE_BOT_MIN_MS`, `PREPARE_BOT_MAX_MS`, `ANSWER_WAIT_HUMAN_MS`, `ANSWER_WAIT_BOT_MS`, `SCORE_APPLY_MS`, `REVEAL_MS`, `SUPER_WAIT_MS`, `BLITZ_*`, `SOLO_DEFAULT_BOTS` и т.д. (см. `apps/api/src/services/bot-engine.service.ts`).
@@ -102,7 +106,7 @@ curl -H "X-Telegram-Init-Data: <raw_query_string_from_telegram>" http://localhos
 > Примечание: `/rooms`, `/rooms/solo`, `/profile` требуют заголовок `X-Telegram-Init-Data` (кроме dev-режима при явно включённом `ALLOW_DEV_NO_TG`).
 
 ## Замечания по продакшену
-- Ограничьте CORS/WS origin для боевой среды (сейчас в коде разрешён `origin: true`).
+- Ограничьте CORS/WS origin: укажите точные домены в `ALLOWED_ORIGINS` (через запятую). Без этого в проде кросс-доменные запросы будут заблокированы.
 - Настройте логирование (pino/winston) и базовые метрики (кол-во комнат, ошибки движка).
 - Не включайте отладочную консоль в прод (`VITE_DEBUG_CONSOLE=false`).
 

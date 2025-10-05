@@ -1,10 +1,13 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './modules/app.module';
+import { getAllowedOrigins, warnIfProdAndNoOrigins } from './config/cors.util';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: true, credentials: true });
+  const allowedOrigins = getAllowedOrigins();
+  warnIfProdAndNoOrigins(allowedOrigins);
+  app.enableCors({ origin: allowedOrigins, credentials: true });
   const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
   if (isProd && process.env.ALLOW_DEV_NO_TG === '1') {
     // eslint-disable-next-line no-console
