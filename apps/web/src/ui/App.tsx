@@ -8,6 +8,7 @@ import { useUiHome } from '../state/ui';
 import { Match } from './Match';
 import DebugConsole from './DebugConsole';
 import ShopModal from './ShopModal';
+import ScoreInfoModal from './ScoreInfoModal';
 import AchievementsModal from './AchievementsModal';
 
 export function App() {
@@ -19,6 +20,7 @@ export function App() {
   const { shopOpen, achievementsOpen, openShop, closeShop, openAchievements, closeAchievements } = useUiHome();
   const [profileScore, setProfileScore] = useState<number>(0);
   const [hintAllowance, setHintAllowance] = useState<number>(0);
+  const [scoreInfoOpen, setScoreInfoOpen] = useState<boolean>(false);
   const testHintAllowance = Number(import.meta.env.VITE_TEST_HINTS);
   useEffect(() => {
     if (testHintAllowance > 0) setHintAllowance(testHintAllowance);
@@ -183,7 +185,7 @@ export function App() {
                 active:opacity-50
                 cursor-pointer
                 flex items-center gap-2
-              " >🏆 Очки: {profileScore}</div>
+              " onClick={() => setScoreInfoOpen(true)} >🏆 Очки: {profileScore}</div>
             <div className="
                 text-sm px-4 py-2 
                 rounded-full
@@ -299,6 +301,7 @@ export function App() {
           }
         }}
       />
+      <ScoreInfoModal open={scoreInfoOpen} onClose={() => setScoreInfoOpen(false)} score={profileScore} />
       <AchievementsModal open={achievementsOpen} onClose={closeAchievements} />
       {showDebugConsole && <DebugConsole />}
     </div>

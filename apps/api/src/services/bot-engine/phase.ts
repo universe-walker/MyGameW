@@ -39,6 +39,16 @@ export function gotoPhase(engine: BotEngineService, roomId: string, phase: Phase
     }
   }
 
+  // On final phase in multiplayer, persist profile scores into rating
+  if (phase === 'final') {
+    try {
+      // Fire-and-forget; safe guard against duplicate application
+      void applyMultiplayerRating(engine, roomId);
+    } catch (e) {
+      void e;
+    }
+  }
+
   emitPhaseMessage(engine, roomId, phase, until);
 }
 
@@ -245,4 +255,84 @@ export function advanceAfterScore(engine: BotEngineService, roomId: string): voi
     void engine.ensureBoard(roomId).then(() => engine.emitBoardState(roomId));
     void engine.schedulePrepare(roomId);
   });
+}
+
+async function applyMultiplayerRating(engine: BotEngineService, roomId: string): Promise<void> {
+  const runtime = engine.rooms.get(roomId);
+  if (!runtime) return;
+  if (runtime.ratingApplied) return;
+  // Only for multiplayer matches
+  if (runtime.mode !== 'multi') return;
+
+  runtime.ratingApplied = true;
+
+  // Collect human player ids from current roster and from score map (in case someone left)
+  let humanIds: number[] = [];
+  try {
+    const players = await engine.redis.getPlayers(roomId);
+    humanIds = players.filter((p) => !p.bot && typeof p.id === 'number' && p.id > 0).map((p) => p.id);
+  } catch {
+    // ignore redis failures; fall back to scores keys
+  }
+  const scoreKeys = Object.keys(runtime.scores || {})
+    .map((k) => Number(k))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  const idSet = new Set<number>([...humanIds, ...scoreKeys]);
+  const ids = Array.from(idSet.values());
+  if (ids.length === 0) return;
+
+  // Build score map for those ids; default 0
+  const scores: Record<number, number> = {};
+  for (const id of ids) scores[id] = runtime.scores?.[id] ?? 0;
+
+  // Determine winners among humans: highest strictly positive score
+  const maxScore = ids.reduce((m, id) => (scores[id] > m ? scores[id] : m), 0);
+  const winners = maxScore > 0 ? new Set(ids.filter((id) => scores[id] === maxScore)) : new Set<number>();
+
+  // Prepare Prisma ops: ensure User existence, then apply profileScore with clamp to >= 0
+  const userEnsures = ids.map((id) =>
+    engine.prisma.user.upsert({
+      where: { id: BigInt(id) },
+      update: {},
+      create: { id: BigInt(id), firstName: 'User', username: null },
+    }),
+  );
+  try {
+    await engine.prisma.$transaction(userEnsures);
+  } catch {
+    // best-effort; continue
+  }
+
+  // Read current metas
+  const metas = await engine.prisma.userMeta.findMany({ where: { userId: { in: ids.map((n) => BigInt(n)) } } });
+  const metaById = new Map<number, { userId: bigint; profileScore: number; hintAllowance: number | null }>();
+  for (const m of metas as any[]) metaById.set(Number(m.userId), { userId: m.userId, profileScore: Number(m.profileScore ?? 0), hintAllowance: Number(m.hintAllowance ?? 0) });
+
+  const ops: any[] = [];
+  for (const id of ids) {
+    const base = scores[id] ?? 0;
+    const delta = winners.has(id) && base > 0 ? base * 2 : base;
+    const current = metaById.get(id)?.profileScore ?? 0;
+    let next = current;
+    if (delta > 0) next = current + delta;
+    else if (delta < 0) next = Math.max(0, current + delta);
+
+    if (metaById.has(id)) {
+      ops.push(
+        engine.prisma.userMeta.update({ where: { userId: BigInt(id) }, data: { profileScore: next } }),
+      );
+    } else {
+      ops.push(
+        engine.prisma.userMeta.create({
+          data: { userId: BigInt(id), profileScore: next, hintAllowance: 0, achievements: undefined },
+        }),
+      );
+    }
+  }
+
+  try {
+    if (ops.length) await engine.prisma.$transaction(ops);
+  } catch (e) {
+    void e;
+  }
 }

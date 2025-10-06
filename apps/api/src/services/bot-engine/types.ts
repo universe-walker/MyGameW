@@ -51,4 +51,6 @@ export type RoomRuntime = {
   hintUsage?: Map<number, { used: number; revealed: Set<number> }>;
   // internal observability helpers
   rosterHash?: string;
+  // ensure rating is applied only once per match
+  ratingApplied?: boolean;
 };
