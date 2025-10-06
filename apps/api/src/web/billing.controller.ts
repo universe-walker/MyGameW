@@ -43,8 +43,8 @@ export class BillingController {
     const amount = qty === 1 ? pricePerLetter : priceQty2;
     const payload = JSON.stringify({ kind: 'purchase', type, qty, userId });
     const invReq: CreateInvoiceLinkReq = {
-      title: qty === 1 ? 'Открыть 1 букву' : 'Открыть 2 буквы',
-      description: 'Покупка подсказок за Telegram Звезды',
+      title: qty === 1 ? 'Подсказка: 1 буква' : 'Подсказки: 2 буквы',
+      description: 'Покупка подсказок для игры в Telegram',
       payload,
       currency: 'XTR',
       prices: [{ label: 'Hints', amount }],
@@ -164,3 +164,4 @@ export class BillingController {
     return { ok: true };
   }
 }
+
