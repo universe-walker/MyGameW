@@ -24,6 +24,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { BotEngineService } from '../services/bot-engine.service';
 import { parseInitData, verifyInitData } from '../services/telegram-auth.util';
+import { getTelegramBotToken } from '../config/telegram.util';
 import { getAllowedOrigins, warnIfProdAndNoOrigins } from '../config/cors.util';
 const WS_ALLOWED_ORIGINS = getAllowedOrigins();
 warnIfProdAndNoOrigins(WS_ALLOWED_ORIGINS);
@@ -43,7 +44,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   handleConnection(client: Socket) {
     const initDataRaw = client.handshake.auth?.initDataRaw as string | undefined;
-    const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
+    const token = getTelegramBotToken();
     const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
     // Dev override is allowed only outside production; missing token must fail closed
     const rawAllowDev = process.env.ALLOW_DEV_NO_TG === '1';

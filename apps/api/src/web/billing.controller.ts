@@ -4,6 +4,7 @@ import { PrismaService } from '../services/prisma.service';
 import { z } from 'zod';
 import { TelemetryService } from '../services/telemetry.service';
 import { TelegramAuthGuard } from './telegram-auth.guard';
+import { getTelegramBotToken } from '../config/telegram.util';
 import type { Request } from 'express';
 
 type CreateInvoiceLinkReq = {
@@ -37,7 +38,7 @@ export class BillingController {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN;
+    const botToken = getTelegramBotToken();
     if (!botToken) throw new HttpException('Missing bot token', HttpStatus.INTERNAL_SERVER_ERROR);
 
     const pricePerLetter = Number(process.env.STARS_PRICE_PER_LETTER || '5'); // default 5 Stars

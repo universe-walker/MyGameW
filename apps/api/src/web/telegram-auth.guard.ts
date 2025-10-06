@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { verifyInitData, parseInitData } from '../services/telegram-auth.util';
+import { getTelegramBotToken } from '../config/telegram.util';
 
 @Injectable()
 export class TelegramAuthGuard implements CanActivate {
@@ -9,7 +10,7 @@ export class TelegramAuthGuard implements CanActivate {
       | string
       | undefined;
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
+    const botToken = getTelegramBotToken();
     const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
     // Dev override is allowed only outside production
     const rawAllowDev = process.env.ALLOW_DEV_NO_TG === '1';

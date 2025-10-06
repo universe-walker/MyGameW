@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './modules/app.module';
 import { getAllowedOrigins, warnIfProdAndNoOrigins } from './config/cors.util';
+import { getTelegramBotToken } from './config/telegram.util';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -14,7 +15,7 @@ async function bootstrap() {
     console.error('ALLOW_DEV_NO_TG must not be enabled in production. Refusing to start.');
     process.exit(1);
   }
-  if (!process.env.TELEGRAM_BOT_TOKEN && !process.env.BOT_TELEGRAM_BOT_TOKEN) {
+  if (!getTelegramBotToken()) {
     // eslint-disable-next-line no-console
     console.warn('Warning: TELEGRAM_BOT_TOKEN is not set. Requests will be rejected by auth guard and WS gateway.');
   }

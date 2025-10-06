@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { ZInitVerifyReq, ZInitVerifyRes } from '@mygame/shared';
 import { parseInitData, verifyInitData } from '../services/telegram-auth.util';
+import { getTelegramBotToken } from '../config/telegram.util';
 
 @Controller('auth/telegram')
 export class AuthController {
@@ -12,7 +13,7 @@ export class AuthController {
       throw new BadRequestException('Invalid request');
     }
     const { initDataRaw } = parsed.data;
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN || '';
+    const botToken = getTelegramBotToken();
     const res = verifyInitData(initDataRaw, botToken);
     try {
       console.log('[auth] /auth/telegram/verify', {

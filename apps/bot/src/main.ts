@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
+import { getTelegramBotToken } from './lib/env';
 
-const botToken = process.env.BOT_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+const botToken = getTelegramBotToken();
 if (!botToken) {
   // eslint-disable-next-line no-console
   console.error('Missing BOT_TELEGRAM_BOT_TOKEN');
