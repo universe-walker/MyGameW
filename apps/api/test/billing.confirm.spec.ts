@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { BillingController } from '../src/web/billing.controller';
 import { PrismaService } from '../src/services/prisma.service';
+import crypto from 'crypto';
 
 class PrismaServiceMock {
   // in-memory stores
@@ -100,8 +101,11 @@ describe('BillingController payments', () => {
   });
 
   it('POST /billing/invoice returns invoiceLink', async () => {
+    const user = { id: 123, username: 'alice', first_name: 'Alice' };
+    const initData = buildInitData(user, process.env.TELEGRAM_BOT_TOKEN!);
     const res = await request(app.getHttpServer())
       .post('/billing/invoice')
+      .set('X-Telegram-Init-Data', initData)
       .send({ userId: 123, type: 'hint_letter', qty: 1 });
 
     expect(res.status).toBe(201);
@@ -109,8 +113,31 @@ describe('BillingController payments', () => {
     expect(global.fetch).toHaveBeenCalled();
   });
 
+  function buildInitData(
+    user: { id: number; username?: string; first_name?: string },
+    botToken: string
+  ): string {
+    const params: Record<string, string> = {};
+    const now = Math.floor(Date.now() / 1000);
+    params.user = encodeURIComponent(JSON.stringify(user));
+    params.auth_date = String(now);
+    const dataCheckString = Object.entries(params)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+    const hash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    const usp = new URLSearchParams({ ...params, hash });
+    return usp.toString();
+  }
+
   it('POST /billing/invoice validates body', async () => {
-    const res = await request(app.getHttpServer()).post('/billing/invoice').send({ foo: 'bar' });
+    const user = { id: 123, username: 'alice', first_name: 'Alice' };
+    const initData = buildInitData(user, process.env.TELEGRAM_BOT_TOKEN!);
+    const res = await request(app.getHttpServer())
+      .post('/billing/invoice')
+      .set('X-Telegram-Init-Data', initData)
+      .send({ foo: 'bar' });
     expect(res.status).toBe(400);
   });
 

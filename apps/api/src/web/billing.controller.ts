@@ -1,8 +1,9 @@
-import { Body, Controller, HttpException, HttpStatus, Optional, Post, Req } from '@nestjs/common';
+import { Body, Controller, HttpException, HttpStatus, Optional, Post, Req, UseGuards } from '@nestjs/common';
 import { ZInvoiceCreateReq, ZInvoiceCreateRes } from '@mygame/shared';
 import { PrismaService } from '../services/prisma.service';
 import { z } from 'zod';
 import { TelemetryService } from '../services/telemetry.service';
+import { TelegramAuthGuard } from './telegram-auth.guard';
 
 type CreateInvoiceLinkReq = {
   title: string;
@@ -16,12 +17,22 @@ type CreateInvoiceLinkReq = {
 export class BillingController {
   constructor(@Optional() private prisma?: PrismaService, @Optional() private telemetry?: TelemetryService) {}
   @Post('invoice')
-  async createInvoice(@Body() body: unknown) {
+  @UseGuards(TelegramAuthGuard)
+  async createInvoice(@Body() body: unknown, @Req() request?: any) {
     const parsed = ZInvoiceCreateReq.safeParse(body);
     if (!parsed.success) {
       throw new HttpException('Invalid request', HttpStatus.BAD_REQUEST);
     }
     const { userId, type, qty } = parsed.data;
+
+    // Ensure the caller is the same authenticated Telegram user
+    const authUserId = Number(request?.user?.id);
+    if (!Number.isInteger(authUserId)) {
+      throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    }
+    if (authUserId !== userId) {
+      throw new HttpException('Forbidden: user mismatch', HttpStatus.FORBIDDEN);
+    }
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN;
     if (!botToken) throw new HttpException('Missing bot token', HttpStatus.INTERNAL_SERVER_ERROR);
@@ -31,7 +42,7 @@ export class BillingController {
 
     const amount = qty === 1 ? pricePerLetter : priceQty2;
     const payload = JSON.stringify({ kind: 'purchase', type, qty, userId });
-    const req: CreateInvoiceLinkReq = {
+    const invReq: CreateInvoiceLinkReq = {
       title: qty === 1 ? 'Открыть 1 букву' : 'Открыть 2 буквы',
       description: 'Покупка подсказок за Telegram Звезды',
       payload,
@@ -42,7 +53,7 @@ export class BillingController {
     const res = await fetch(`https://api.telegram.org/bot${botToken}/createInvoiceLink`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
+      body: JSON.stringify(invReq),
     });
     if (!res.ok) {
       const text = await res.text();
