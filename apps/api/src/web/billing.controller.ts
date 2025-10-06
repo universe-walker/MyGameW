@@ -31,7 +31,7 @@ export class BillingController {
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
     if (authUserId !== userId) {
-      throw new HttpException('Forbidden: user mismatch', HttpStatus.FORBIDDEN);
+      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TELEGRAM_BOT_TOKEN;
@@ -164,4 +164,3 @@ export class BillingController {
     return { ok: true };
   }
 }
-
