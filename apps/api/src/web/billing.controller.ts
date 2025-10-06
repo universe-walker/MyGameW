@@ -4,6 +4,7 @@ import { PrismaService } from '../services/prisma.service';
 import { z } from 'zod';
 import { TelemetryService } from '../services/telemetry.service';
 import { TelegramAuthGuard } from './telegram-auth.guard';
+import type { Request } from 'express';
 
 type CreateInvoiceLinkReq = {
   title: string;
@@ -13,12 +14,14 @@ type CreateInvoiceLinkReq = {
   prices: Array<{ label: string; amount: number }>;
 };
 
+type AuthedRequest = Request & { user?: { id: number; username?: string; first_name?: string } };
+
 @Controller('billing')
 export class BillingController {
   constructor(@Optional() private prisma?: PrismaService, @Optional() private telemetry?: TelemetryService) {}
   @Post('invoice')
   @UseGuards(TelegramAuthGuard)
-  async createInvoice(@Body() body: unknown, @Req() request?: any) {
+  async createInvoice(@Body() body: unknown, @Req() request?: AuthedRequest) {
     const parsed = ZInvoiceCreateReq.safeParse(body);
     if (!parsed.success) {
       throw new HttpException('Invalid request', HttpStatus.BAD_REQUEST);
