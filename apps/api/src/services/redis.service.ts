@@ -136,99 +136,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async removePlayer(roomId: string, playerId: number) {
     const key = this.keyRoomPlayers(roomId);
-    const type = await this.withTimeout(this.client.type(key), 'type players');
-    if (type === 'hash') {
-      await this.withTimeout(this.client.hdel(key, String(playerId)), 'hdel player');
-      return;
-    }
-    if (type === 'set') {
-      const members = await this.withTimeout(this.client.smembers(key), 'smembers players');
-      const toRemove = members.find((m) => {
-        try { const p = JSON.parse(m) as TRoomPlayer; return p.id === playerId; } catch { return false; }
-      });
-      if (toRemove) await this.withTimeout(this.client.srem(key, toRemove), 'srem player');
-    }
+    await this.removePlayerFromKey(key, playerId);
   }
 
   async getPlayers(roomId: string): Promise<TRoomPlayer[]> {
     const key = this.keyRoomPlayers(roomId);
-    const type = await this.withTimeout(this.client.type(key), 'type players');
-    if (type === 'hash') {
-      const values = await this.withTimeout(this.client.hvals(key), 'hvals players');
-      const players: TRoomPlayer[] = [];
-      for (const v of values) {
-        try {
-          const p = JSON.parse(v) as TRoomPlayer;
-          if (typeof p?.id === 'number' && typeof p?.name === 'string') players.push(p);
-        } catch {
-          // ignore malformed entries
-        }
-      }
-      return players;
-    }
-    if (type === 'set') {
-      // Backward-compat: old storage as Set<JSON>
-      const members = await this.withTimeout(this.client.smembers(key), 'smembers players');
-      const players: TRoomPlayer[] = [];
-      for (const m of members) {
-        try {
-          const p = JSON.parse(m) as TRoomPlayer;
-          if (typeof p?.id === 'number' && typeof p?.name === 'string') players.push(p);
-        } catch {
-          // ignore
-        }
-      }
-      return players;
-    }
-    return [];
+    return this.getPlayersFromKey(key);
   }
 
   async getPlayersByKey(playersKey: string): Promise<TRoomPlayer[]> {
-    const type = await this.withTimeout(this.client.type(playersKey), 'type playersKey');
-    if (type === 'hash') {
-      const values = await this.withTimeout(this.client.hvals(playersKey), 'hvals playersKey');
-      const players: TRoomPlayer[] = [];
-      for (const v of values) {
-        try {
-          const p = JSON.parse(v) as TRoomPlayer;
-          if (typeof p?.id === 'number' && typeof p?.name === 'string') players.push(p);
-        } catch {
-          // ignore malformed entries
-        }
-      }
-      return players;
-    }
-    if (type === 'set') {
-      // Backward-compat: old storage as Set<JSON>
-      const members = await this.withTimeout(this.client.smembers(playersKey), 'smembers playersKey');
-      const players: TRoomPlayer[] = [];
-      for (const m of members) {
-        try {
-          const p = JSON.parse(m) as TRoomPlayer;
-          if (typeof p?.id === 'number' && typeof p?.name === 'string') players.push(p);
-        } catch {
-          // ignore
-        }
-      }
-      return players;
-    }
-    return [];
+    return this.getPlayersFromKey(playersKey);
   }
 
   async removePlayerByKey(playersKey: string, playerId: number) {
-    const type = await this.withTimeout(this.client.type(playersKey), 'type playersKey');
-    if (type === 'hash') {
-      await this.withTimeout(this.client.hdel(playersKey, String(playerId)), 'hdel playerKey');
-      return;
-    }
-    if (type === 'set') {
-      // Backward-compat: locate JSON entry with this id and SREM it
-      const members = await this.withTimeout(this.client.smembers(playersKey), 'smembers playersKey');
-      const toRemove = members.find((m) => {
-        try { const p = JSON.parse(m) as TRoomPlayer; return p.id === playerId; } catch { return false; }
-      });
-      if (toRemove) await this.withTimeout(this.client.srem(playersKey, toRemove), 'srem playerKey');
-    }
+    await this.removePlayerFromKey(playersKey, playerId);
   }
 
   async listRoomPlayerKeys(): Promise<string[]> {
@@ -263,6 +184,58 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.del(key);
     for (const [field, value] of entries) pipeline.hset(key, field, value);
     await this.withTimeout(pipeline.exec(), 'pipeline migrate');
+  }
+
+  // Unified helpers for reading/removing players regardless of Redis type
+  private async getPlayersFromKey(key: string): Promise<TRoomPlayer[]> {
+    const type = await this.withTimeout(this.client.type(key), 'type players');
+    if (type === 'hash') {
+      const values = await this.withTimeout(this.client.hvals(key), 'hvals players');
+      const players: TRoomPlayer[] = [];
+      for (const v of values) {
+        try {
+          const p = JSON.parse(v) as TRoomPlayer;
+          if (typeof p?.id === 'number' && typeof p?.name === 'string') players.push(p);
+        } catch {
+          // ignore malformed entries
+        }
+      }
+      return players;
+    }
+    if (type === 'set') {
+      const members = await this.withTimeout(this.client.smembers(key), 'smembers players');
+      const players: TRoomPlayer[] = [];
+      for (const m of members) {
+        try {
+          const p = JSON.parse(m) as TRoomPlayer;
+          if (typeof p?.id === 'number' && typeof p?.name === 'string') players.push(p);
+        } catch {
+          // ignore malformed entries
+        }
+      }
+      return players;
+    }
+    return [];
+  }
+
+  private async removePlayerFromKey(key: string, playerId: number): Promise<void> {
+    const type = await this.withTimeout(this.client.type(key), 'type players');
+    if (type === 'hash') {
+      await this.withTimeout(this.client.hdel(key, String(playerId)), 'hdel player');
+      return;
+    }
+    if (type === 'set') {
+      const members = await this.withTimeout(this.client.smembers(key), 'smembers players');
+      const toRemove = members.find((m) => {
+        try {
+          const p = JSON.parse(m) as TRoomPlayer;
+          return p.id === playerId;
+        } catch {
+          return false;
+        }
+      });
+      if (toRemove) await this.withTimeout(this.client.srem(key, toRemove), 'srem player');
+    }
   }
 
   // TTL helpers
