@@ -1,5 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
-import { getTelegramBotToken } from './lib/env';
+// In ESM runtime (type: "module"), Node requires explicit file extensions.
+// Keep .js here so compiled JS imports resolve at runtime.
+import { getTelegramBotToken } from './lib/env.js';
 
 const botToken = getTelegramBotToken();
 if (!botToken) {
