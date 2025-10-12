@@ -1,14 +1,29 @@
 import { getInitDataRaw } from './telegram';
 
-const base =
-  import.meta.env.VITE_API_BASE_URL ||
-  (window as any).API_BASE_URL ||
-  'http://localhost:4000';
-const prefix = ((import.meta as any).env?.VITE_API_PATH_PREFIX || (window as any).API_PATH_PREFIX || '') as string;
+// Derive API base more robustly for production builds
+const env: any = (import.meta as any)?.env || {};
+const isProd = String(env?.MODE || '').toLowerCase() === 'production';
+const win: any = (typeof window !== 'undefined' ? (window as any) : undefined);
 
-export const apiBase = `${base}${prefix}`;
-export const apiHostBase = base as string;
-export const apiPathPrefix = prefix as string;
+const resolvedBase =
+  (env?.VITE_API_BASE_URL as string | undefined) ||
+  (win?.API_BASE_URL as string | undefined) ||
+  // Fallback to same-origin in browsers
+  (typeof location !== 'undefined' ? location.origin : undefined) ||
+  // Final fallback for local dev
+  'http://localhost:4000';
+
+const resolvedPrefix = (
+  (env?.VITE_API_PATH_PREFIX as string | undefined) ||
+  (win?.API_PATH_PREFIX as string | undefined) ||
+  // Default to '/api' in production for reverse-proxy setups
+  (isProd ? '/api' : '') ||
+  ''
+) as string;
+
+export const apiBase = `${resolvedBase}${resolvedPrefix}`;
+export const apiHostBase = resolvedBase as string;
+export const apiPathPrefix = resolvedPrefix as string;
 
 export async function fetchApi(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers || {});
