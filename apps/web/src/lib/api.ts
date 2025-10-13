@@ -13,13 +13,7 @@ const resolvedBase =
   // Final fallback for local dev
   'http://localhost:4000';
 
-const resolvedPrefix = (
-  (env?.VITE_API_PATH_PREFIX as string | undefined) ||
-  (win?.API_PATH_PREFIX as string | undefined) ||
-  // Default to '/api' in production for reverse-proxy setups
-  (isProd ? '/api' : '') ||
-  ''
-) as string;
+const resolvedPrefix = '/api';
 
 export const apiBase = `${resolvedBase}${resolvedPrefix}`;
 export const apiHostBase = resolvedBase as string;
