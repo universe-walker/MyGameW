@@ -1,5 +1,5 @@
-import { Body, Controller, HttpException, HttpStatus, Optional, Post, Req, UseGuards } from '@nestjs/common';
-import { ZInvoiceCreateReq, ZInvoiceCreateRes } from '@mygame/shared';
+import { Body, Controller, Get, HttpException, HttpStatus, Optional, Post, Req, UseGuards } from '@nestjs/common';
+import { ZInvoiceCreateReq, ZInvoiceCreateRes, ZBillingPacksRes } from '@mygame/shared';
 import { PrismaService } from '../services/prisma.service';
 import { z } from 'zod';
 import { TelemetryService } from '../services/telemetry.service';
@@ -20,6 +20,60 @@ type AuthedRequest = Request & { user?: { id: number; username?: string; first_n
 @Controller('billing')
 export class BillingController {
   constructor(@Optional() private prisma?: PrismaService, @Optional() private telemetry?: TelemetryService) {}
+
+  private parsePacks(envStr: string | undefined): Array<{ qty: number; price: number }> {
+    const out: Array<{ qty: number; price: number }> = [];
+    if (!envStr) return out;
+    const parts = String(envStr)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const p of parts) {
+      const [qStr, aStr] = p.split(':').map((x) => x.trim());
+      const qty = Number(qStr);
+      const price = Number(aStr);
+      if (Number.isInteger(qty) && qty > 0 && Number.isFinite(price) && price > 0) {
+        out.push({ qty, price });
+      }
+    }
+    const uniq = new Map<number, number>();
+    for (const it of out) if (!uniq.has(it.qty)) uniq.set(it.qty, it.price);
+    return [...uniq.entries()].map(([qty, price]) => ({ qty, price })).sort((a, b) => a.qty - b.qty);
+  }
+
+  private resolvePrice(qty: number): { amount: number; title: string } {
+    const packs = this.parsePacks(process.env.STARS_PACKS);
+    if (packs.length > 0) {
+      const found = packs.find((p) => p.qty === qty);
+      if (!found) {
+        throw new HttpException('Unsupported quantity', HttpStatus.BAD_REQUEST);
+      }
+      return { amount: found.price, title: `Подсказки: ${qty} шт` };
+    }
+    const pricePerLetter = Number(process.env.STARS_PRICE_PER_LETTER || '5');
+    const priceQty2 = Number(process.env.STARS_PRICE_TWO_LETTERS || String(pricePerLetter * 2 - 1));
+    if (qty === 1) return { amount: pricePerLetter, title: 'Подсказки: 1 шт' };
+    if (qty === 2) return { amount: priceQty2, title: 'Подсказки: 2 шт' };
+    throw new HttpException('Unsupported quantity', HttpStatus.BAD_REQUEST);
+  }
+
+  @Get('packs')
+  getPacks() {
+    const packs = this.parsePacks(process.env.STARS_PACKS);
+    const items =
+      packs.length > 0
+        ? packs
+        : (() => {
+            const pricePerLetter = Number(process.env.STARS_PRICE_PER_LETTER || '5');
+            const priceQty2 = Number(process.env.STARS_PRICE_TWO_LETTERS || String(pricePerLetter * 2 - 1));
+            return [
+              { qty: 1, price: pricePerLetter },
+              { qty: 2, price: priceQty2 },
+            ];
+          })();
+    return ZBillingPacksRes.parse({ currency: 'XTR', items });
+  }
+
   @Post('invoice')
   @UseGuards(TelegramAuthGuard)
   async createInvoice(@Body() body: unknown, @Req() request?: AuthedRequest) {
@@ -41,14 +95,11 @@ export class BillingController {
     const botToken = getTelegramBotToken();
     if (!botToken) throw new HttpException('Missing bot token', HttpStatus.INTERNAL_SERVER_ERROR);
 
-    const pricePerLetter = Number(process.env.STARS_PRICE_PER_LETTER || '5'); // default 5 Stars
-    const priceQty2 = Number(process.env.STARS_PRICE_TWO_LETTERS || String(pricePerLetter * 2 - 1));
-
-    const amount = qty === 1 ? pricePerLetter : priceQty2;
+    const { amount, title } = this.resolvePrice(qty);
     const payload = JSON.stringify({ kind: 'purchase', type, qty, userId });
     const invReq: CreateInvoiceLinkReq = {
-      title: qty === 1 ? 'Подсказка: 1 буква' : 'Подсказки: 2 буквы',
-      description: 'Покупка подсказок для игры в Telegram',
+      title,
+      description: 'Покупка подсказок за Stars в Telegram',
       payload,
       currency: 'XTR',
       prices: [{ label: 'Hints', amount }],
@@ -95,7 +146,7 @@ export class BillingController {
     const { telegram_payment_charge_id, currency, total_amount, invoice_payload } = parsed.data;
     void currency; // already validated by zod literal
 
-    let payload: { kind: string; type: 'hint_letter'; qty: 1 | 2; userId: number };
+    let payload: { kind: string; type: 'hint_letter'; qty: number; userId: number };
     try {
       payload = JSON.parse(invoice_payload);
     } catch {
@@ -113,9 +164,22 @@ export class BillingController {
     }
 
     // Validate amount matches configured price
-    const pricePerLetter = Number(process.env.STARS_PRICE_PER_LETTER || '5');
-    const priceQty2 = Number(process.env.STARS_PRICE_TWO_LETTERS || String(pricePerLetter * 2 - 1));
-    const expected = payload.qty === 1 ? pricePerLetter : priceQty2;
+    const packs = this.parsePacks(process.env.STARS_PACKS);
+    let expected: number | null = null;
+    if (packs.length > 0) {
+      const f = packs.find((p) => p.qty === payload.qty);
+      expected = f ? f.price : null;
+    } else {
+      const pricePerLetter = Number(process.env.STARS_PRICE_PER_LETTER || '5');
+      const priceQty2 = Number(process.env.STARS_PRICE_TWO_LETTERS || String(pricePerLetter * 2 - 1));
+      if (payload.qty === 1) expected = pricePerLetter;
+      else if (payload.qty === 2) expected = priceQty2;
+      else expected = null;
+    }
+    if (expected == null) {
+      this.telemetry?.paymentConfirmError('unsupported_qty', { qty: payload.qty });
+      throw new HttpException('Unsupported quantity', HttpStatus.BAD_REQUEST);
+    }
     if (total_amount !== expected) {
       this.telemetry?.paymentConfirmError('amount_mismatch', { total_amount, expected });
       throw new HttpException('Amount mismatch', HttpStatus.BAD_REQUEST);

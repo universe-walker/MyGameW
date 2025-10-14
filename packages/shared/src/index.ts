@@ -33,9 +33,17 @@ export const ZBoardPickReq = z.object({
 export const ZInvoiceCreateReq = z.object({
   userId: z.number().int(),
   type: z.enum(['hint_letter']),
-  qty: z.union([z.literal(1), z.literal(2)]),
+  // Allow configurable packs (validated on server against env)
+  qty: z.number().int().min(1).max(100),
 });
 export const ZInvoiceCreateRes = z.object({ invoiceLink: z.string().url() });
+
+// Billing packs (server -> client)
+export const ZBillingPacksRes = z.object({
+  currency: z.literal('XTR'),
+  items: z.array(z.object({ qty: z.number().int().min(1), price: z.number().int().min(1) })),
+});
+export type TBillingPacksRes = z.infer<typeof ZBillingPacksRes>;
 
 // Profile
 export const ZProfileRes = z.object({

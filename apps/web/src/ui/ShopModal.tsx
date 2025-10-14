@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApi } from '../lib/api';
 import { getUser, onInvoiceClosed, offInvoiceClosed, openInvoice } from '../lib/telegram';
+import type { TBillingPacksRes } from '@mygame/shared';
 
 interface ShopModalProps {
   open: boolean;
@@ -14,10 +15,26 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
 
   const user = getUser();
 
-  // Prices in Telegram Stars, configurable via Vite env
-  const pricePerLetter = Number((import.meta as any).env?.VITE_STARS_PRICE_PER_LETTER) || 10;
-  const priceTwoLetters =
-    Number((import.meta as any).env?.VITE_STARS_PRICE_TWO_LETTERS) || pricePerLetter * 2 - 2;
+  const [packs, setPacks] = useState<Array<{ qty: number; price: number }>>([]);
+  const [packsError, setPacksError] = useState<string | null>(null);
+  const [packsLoading, setPacksLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setPacksLoading(true);
+    setPacksError(null);
+    fetchApi('/billing/packs')
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = (await r.json()) as TBillingPacksRes;
+        setPacks(j.items.sort((a: { qty: number; price: number }, b: { qty: number; price: number }) => a.qty - b.qty));
+      })
+      .catch((e) => {
+        console.error('[Shop] packs load error', e);
+        setPacksError('Не удалось загрузить цены');
+      })
+      .finally(() => setPacksLoading(false));
+  }, [open]);
 
   const mountedRef = useRef(false);
   useEffect(() => {
@@ -48,7 +65,7 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
   }, [open, handleInvoiceClosed]);
 
   const buy = useCallback(
-    async (qty: 1 | 2) => {
+    async (qty: number) => {
       setError(null);
       if (!user?.id) {
         setError('Покупка доступна только в Telegram (WebApp).');
@@ -105,45 +122,37 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
 
         {/* Варианты покупки */}
         <div className="space-y-3 mb-6">
-          {/* Вариант 1 */}
-          <div className="bg-white rounded-xl p-4 border-2 border-gray-100 hover:border-orange-200 transition-all duration-300 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">⭐️</span>
-                <div>
-                  <div className="font-semibold text-gray-800">Буква подсказки: 1 шт</div>
-                  <div className="text-xs text-gray-500">Цена: {pricePerLetter} зв</div>
-                </div>
-              </div>
-              <button
-                className="px-5 py-2.5 rounded-full bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_8px_15px_-3px_rgba(46,134,171,0.4)] text-white font-semibold text-sm transition-all duration-300 ease-in-out hover:translate-y-[2px] hover:shadow-none active:opacity-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                onClick={() => buy(1)}
-                disabled={pending}
-              >
-                Купить
-              </button>
+          {packsLoading && (
+            <div className="text-sm text-gray-500">Загрузка цен…</div>
+          )}
+          {packsError && !packsLoading && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg p-3 text-sm text-yellow-800">
+              {packsError}
             </div>
-          </div>
-
-          {/* Вариант 2 */}
-          <div className="bg-white rounded-xl p-4 border-2 border-gray-100 hover:border-orange-200 transition-all duration-300 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">⭐️⭐️</span>
-                <div>
-                  <div className="font-semibold text-gray-800">Буква подсказки: 2 шт</div>
-                  <div className="text-xs text-gray-500">Цена: {priceTwoLetters} зв</div>
+          )}
+          {!packsLoading && !packsError && packs.length === 0 && (
+            <div className="text-sm text-gray-500">Нет доступных пакетов</div>
+          )}
+          {packs.map((p) => (
+            <div key={p.qty} className="bg-white rounded-xl p-4 border-2 border-gray-100 hover:border-orange-200 transition-all duration-300 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">⭐️×{p.qty}</span>
+                  <div>
+                    <div className="font-semibold text-gray-800">Буква подсказки: {p.qty} шт</div>
+                    <div className="text-xs text-gray-500">Цена: {p.price} зв</div>
+                  </div>
                 </div>
+                <button
+                  className="px-5 py-2.5 rounded-full bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_8px_15px_-3px_rgba(46,134,171,0.4)] text-white font-semibold text-sm transition-all duration-300 ease-in-out hover:translate-y-[2px] hover:shadow-none active:opacity-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  onClick={() => buy(p.qty)}
+                  disabled={pending}
+                >
+                  Купить
+                </button>
               </div>
-              <button
-                className="px-5 py-2.5 rounded-full bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_8px_15px_-3px_rgba(46,134,171,0.4)] text-white font-semibold text-sm transition-all duration-300 ease-in-out hover:translate-y-[2px] hover:shadow-none active:opacity-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                onClick={() => buy(2)}
-                disabled={pending}
-              >
-                Купить
-              </button>
             </div>
-          </div>
+          ))}
 
           {/* Ошибка */}
           {error && (
@@ -168,4 +177,3 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
 }
 
 export default ShopModal;
-
