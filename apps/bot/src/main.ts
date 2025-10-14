@@ -101,6 +101,16 @@ bot.command('start', async (ctx) => {
 
 console.log('🔄 Attempting to start bot...');
 
+// Answer pre_checkout_query to avoid "bot didn't respond in time"
+bot.on('pre_checkout_query', async (ctx) => {
+  try {
+    await ctx.answerPreCheckoutQuery(true);
+    console.log('[bot] pre_checkout_query: accepted');
+  } catch (e) {
+    console.error('[bot] pre_checkout_query: failed to answer', e);
+  }
+});
+
 // Handle successful payment (Stars). Confirm on API to credit the user.
 bot.on('message:successful_payment', async (ctx) => {
   try {
