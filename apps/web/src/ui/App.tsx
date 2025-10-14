@@ -94,6 +94,30 @@ export function App() {
     }
   }, []);
 
+  // Refresh profile when returning to home (e.g., after leaving a match)
+  // Fixes: hint balance could appear stale/zero until full reload
+  useEffect(() => {
+    if (roomId) return; // only when not in a room
+    const user = getUser();
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchApi(`/profile`);
+        if (!cancelled && r.ok) {
+          const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
+          if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
+          if (typeof j.hintAllowance === 'number') setHintAllowance(j.hintAllowance);
+        }
+      } catch (e) {
+        console.error('[ui] refresh profile after leaving match failed', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
+
   const onFindGame = async () => {
     console.log('[ui] onFindGame: click');
     setGameStarted(true);
