@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApi } from '../lib/api';
-import { getUser, onInvoiceClosed, offInvoiceClosed, openInvoice } from '../lib/telegram';
+import { getUser, onInvoiceClosed, offInvoiceClosed, openInvoice, openTelegramLink } from '../lib/telegram';
 import type { TBillingPacksRes } from '@mygame/shared';
 
 interface ShopModalProps {
@@ -12,6 +12,9 @@ interface ShopModalProps {
 export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showInvoiceFallback, setShowInvoiceFallback] = useState(false);
+  const invoiceUrlRef = useRef<string | null>(null);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const user = getUser();
 
@@ -84,6 +87,12 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
         }
         const json = (await res.json()) as { invoiceLink: string };
         if (!json.invoiceLink) throw new Error('invoiceLink не получен от сервера');
+        invoiceUrlRef.current = json.invoiceLink;
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
+          setShowInvoiceFallback(true);
+        }, 8000);
         openInvoice(json.invoiceLink, async (status) => {
           if (status === 'paid') {
             onPurchaseCompleted?.();
@@ -91,6 +100,11 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
           } else if (status === 'failed') {
             setError('Оплата не прошла. Попробуйте снова.');
           }
+          if (fallbackTimerRef.current) {
+            clearTimeout(fallbackTimerRef.current);
+            fallbackTimerRef.current = null;
+          }
+          setShowInvoiceFallback(false);
           setPending(false);
         });
       } catch (e: any) {
@@ -163,6 +177,20 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
             </div>
           ))}
 
+          {showInvoiceFallback && invoiceUrlRef.current && (
+            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3 flex items-center justify-between gap-3">
+              <div className="text-sm text-blue-800">
+                Если оплата в окне Telegram не открывается, попробуйте перейти по ссылке ниже.
+              </div>
+              <button
+                className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 active:opacity-90"
+                onClick={() => openTelegramLink(invoiceUrlRef.current!)}
+              >
+                Открыть счет в Telegram
+              </button>
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-3 flex items-center gap-2">
               <span className="text-xl">⚠️</span>
@@ -185,4 +213,3 @@ export function ShopModal({ open, onClose, onPurchaseCompleted }: ShopModalProps
 }
 
 export default ShopModal;
-

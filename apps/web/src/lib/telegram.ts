@@ -205,3 +205,13 @@ export function offInvoiceClosed(cb: (data: { url: string; status: 'paid' | 'can
   wa?.offEvent?.('invoiceClosed', cb as any);
 }
 
+// Explicit fallback to open invoice link directly in Telegram
+export function openTelegramLink(url: string) {
+  const wa = window.Telegram?.WebApp;
+  if (wa?.openTelegramLink) {
+    wa.openTelegramLink(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
