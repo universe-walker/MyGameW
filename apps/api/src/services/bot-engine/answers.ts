@@ -475,7 +475,8 @@ export function scheduleBotThinkAndAnswer(engine: BotEngineService, roomId: stri
 
 
 
-  const thinkMs = engine.config.getInt('BOT_THINK_MS', 900);
+  // Make bots decide strictly after 7 seconds to allow players time to read
+  const thinkMs = engine.config.getInt('BOT_THINK_MS', 7000);
 
   engine.emitBotStatus(roomId, botPlayerId, 'thinking');
 
