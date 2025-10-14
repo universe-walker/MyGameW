@@ -69,10 +69,63 @@ function getFallbackInitData(): { initData: string; parsed: URLSearchParams } | 
   }
 }
 
+// Cache initData client-side to bridge Telegram's occasional missing initData
+// on reloads or when returning from in-app invoices. We enforce TTL locally.
+const INITDATA_CACHE_KEY = 'tg_webapp_initdata_cache_v1';
+
+function getCachedInitData(): string | null {
+  try {
+    const raw = localStorage.getItem(INITDATA_CACHE_KEY);
+    if (!raw) return null;
+    // Validate TTL using embedded auth_date
+    const params = new URLSearchParams(raw);
+    const authDateStr = params.get('auth_date');
+    const authDate = authDateStr ? Number(authDateStr) : NaN;
+    if (!Number.isFinite(authDate)) return null;
+    const now = Math.floor(Date.now() / 1000);
+    const age = Math.max(0, now - authDate);
+    if (age > TELEGRAM_INIT_DATA_TTL_SECONDS) {
+      // Expired locally — drop cache
+      try { localStorage.removeItem(INITDATA_CACHE_KEY); } catch {}
+      return null;
+    }
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedInitData(raw: string) {
+  try {
+    if (!raw || !raw.trim()) return;
+    // Only cache strings that look like query strings and contain auth_date
+    const params = new URLSearchParams(raw);
+    const hasAuth = !!params.get('auth_date');
+    if (!hasAuth) return;
+    localStorage.setItem(INITDATA_CACHE_KEY, raw);
+  } catch {
+    // Ignore storage errors (e.g., Safari private mode)
+  }
+}
+
 export function getInitDataRaw(): string | null {
+  // 1) Prefer Telegram-provided initData
   const fromTelegram = window.Telegram?.WebApp?.initData;
-  if (fromTelegram && fromTelegram.trim()) return fromTelegram;
-  return getFallbackInitData()?.initData ?? null;
+  if (fromTelegram && fromTelegram.trim()) {
+    // Keep a fresh copy to survive reloads
+    setCachedInitData(fromTelegram);
+    return fromTelegram;
+  }
+  // 2) Fallback to initData encoded in URL hash (tgWebAppData)
+  const fromHash = getFallbackInitData()?.initData ?? null;
+  if (fromHash && fromHash.trim()) {
+    setCachedInitData(fromHash);
+    return fromHash;
+  }
+  // 3) Last resort: use locally cached initData within TTL
+  const cached = getCachedInitData();
+  if (cached && cached.trim()) return cached;
+  return null;
 }
 
 export function getUser(): TelegramUser | null {

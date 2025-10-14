@@ -115,6 +115,44 @@ export function App() {
     }
   }, []);
 
+  // Proactive resume sync: when the WebApp regains focus or becomes visible
+  // (e.g., after paying invoice or minimizing), refresh profile to update
+  // hint balance and score. This covers cases when invoiceClosed event is
+  // missed or Telegram reload lacks initData temporarily.
+  useEffect(() => {
+    const user = getUser();
+    if (!user) return;
+    let lastRefreshedAt = 0;
+    const minIntervalMs = 800; // debounce rapid duplicate events
+    const refresh = async () => {
+      const now = Date.now();
+      if (now - lastRefreshedAt < minIntervalMs) return;
+      lastRefreshedAt = now;
+      try {
+        const r = await fetchApi(`/profile`);
+        if (r.ok) {
+          const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
+          if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
+          if (typeof j.hintAllowance === 'number') setHintAllowance(j.hintAllowance);
+        }
+      } catch (e) {
+        console.warn('[ui] resume refresh failed', e);
+      }
+    };
+    const onVisibility = () => {
+      try {
+        if (document.visibilityState === 'visible') refresh();
+      } catch {}
+    };
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
   // Refresh profile when returning to home (e.g., after leaving a match)
   // Fixes: hint balance could appear stale/zero until full reload
   useEffect(() => {
