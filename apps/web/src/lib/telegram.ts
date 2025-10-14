@@ -129,17 +129,33 @@ export function getInitDataRaw(): string | null {
 }
 
 export function getUser(): TelegramUser | null {
+  // 1) Direct from Telegram runtime
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
   if (tgUser?.id) return tgUser;
-  const fallback = getFallbackInitData();
-  const rawUser = fallback?.parsed.get('user');
-  if (!rawUser) return null;
-  try {
-    const decoded = decodeURIComponent(rawUser);
-    return JSON.parse(decoded) as TelegramUser;
-  } catch {
-    return null;
+  // 2) From current hash fallback (first-run with tgWebAppData in URL)
+  const hashFallback = getFallbackInitData();
+  const rawHashUser = hashFallback?.parsed.get('user');
+  if (rawHashUser) {
+    try {
+      const decoded = decodeURIComponent(rawHashUser);
+      const obj = JSON.parse(decoded) as TelegramUser;
+      if (obj?.id) return obj;
+    } catch {}
   }
+  // 3) Parse from cached initData (covers Telegram reloads without initDataUnsafe/user)
+  try {
+    const initDataRaw = getInitDataRaw();
+    if (initDataRaw && initDataRaw.trim()) {
+      const params = new URLSearchParams(initDataRaw);
+      const u = params.get('user');
+      if (u) {
+        const dec = decodeURIComponent(u);
+        const obj = JSON.parse(dec) as TelegramUser;
+        if (obj?.id) return obj;
+      }
+    }
+  } catch {}
+  return null;
 }
 
 

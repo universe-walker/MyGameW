@@ -103,16 +103,15 @@ export function App() {
       }
     })();
 
-    // Load profile (score and hint balance)
-    if (user) {
-      fetchApi(`/profile`).then(async (r) => {
-        if (r.ok) {
-          const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
-          if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
-          if (typeof j.hintAllowance === 'number') setHintAllowance(j.hintAllowance);
-        }
-      });
-    }
+    // Load profile (score and hint balance) regardless of getUser();
+    // header auth comes from getInitDataRaw() which we now cache across reloads
+    fetchApi(`/profile`).then(async (r) => {
+      if (r.ok) {
+        const j = (await r.json()) as { profileScore: number; hintAllowance?: number };
+        if (typeof j.profileScore === 'number') setProfileScore(j.profileScore);
+        if (typeof j.hintAllowance === 'number') setHintAllowance(j.hintAllowance);
+      }
+    });
   }, []);
 
   // Proactive resume sync: when the WebApp regains focus or becomes visible
@@ -120,8 +119,6 @@ export function App() {
   // hint balance and score. This covers cases when invoiceClosed event is
   // missed or Telegram reload lacks initData temporarily.
   useEffect(() => {
-    const user = getUser();
-    if (!user) return;
     let lastRefreshedAt = 0;
     const minIntervalMs = 800; // debounce rapid duplicate events
     const refresh = async () => {
@@ -157,8 +154,6 @@ export function App() {
   // Fixes: hint balance could appear stale/zero until full reload
   useEffect(() => {
     if (roomId) return; // only when not in a room
-    const user = getUser();
-    if (!user) return;
     let cancelled = false;
     (async () => {
       try {
