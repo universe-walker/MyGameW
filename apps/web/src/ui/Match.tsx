@@ -299,7 +299,7 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
               whitespace-nowrap
             "
           >
-            {((phase === 'answer_wait' && typeof activePlayerId === 'number' && botStatuses[activePlayerId] === 'passed')
+            {(((phase === 'answer_wait' || phase === 'score_apply') && typeof activePlayerId === 'number' && botStatuses[activePlayerId] === 'passed')
               ? (statusText + ' — пас')
               : statusText) || '\u00A0'}
           </div>
