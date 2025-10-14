@@ -91,7 +91,6 @@ export function Controls({ onAnswer, onPause, onResume, onLeave, isMyTurnToAnswe
       out = typed;
     }
     out = out.trim();
-    if (!out) return;
     // If game is paused (solo), resume first, then answer
     if (paused && onResume) {
       try { onResume(); } catch {}

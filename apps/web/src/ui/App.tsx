@@ -194,8 +194,9 @@ export function App() {
 
   const onAnswer = (text: string) => {
     const socket = getSocket();
-    if (roomId && socket && text.trim()) {
-      socket.emit('answer:submit', { roomId, text: text.trim() });
+    if (roomId && socket) {
+      const payload = { roomId, text: text.trim() } as any;
+      socket.emit('answer:submit', payload);
     }
   };
 

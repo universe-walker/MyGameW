@@ -299,7 +299,9 @@ export function Match({ onAnswer, onPause, onResume, onLeave }: Props) {
               whitespace-nowrap
             "
           >
-            {statusText || '\u00A0'}
+            {((phase === 'answer_wait' && typeof activePlayerId === 'number' && botStatuses[activePlayerId] === 'passed')
+              ? (statusText + ' — пас')
+              : statusText) || '\u00A0'}
           </div>
 
           {/* Индикатор паузы — капсула в оранжевом градиенте */}

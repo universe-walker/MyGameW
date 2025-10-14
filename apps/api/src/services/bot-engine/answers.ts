@@ -21,6 +21,21 @@ export async function onHumanAnswer(engine: BotEngineService, roomId: string, pl
 
     const normalizedInput = normalizeAnswer(text);
 
+    // Treat empty input as an explicit pass: broadcast status and advance flow
+    if (!normalizedInput || normalizedInput.length === 0) {
+      try {
+        engine.emitBotStatus(roomId, playerId, 'passed');
+      } catch {}
+      runtime.lastAnswerCorrect = false;
+      engine.goto(roomId, 'score_apply', Date.now() + engine.config.scoreApplyMs);
+      if (runtime.blitzActive) {
+        engine.timers.set(roomId, 'phase_score_apply', engine.config.scoreApplyMs, () => engine.advanceAfterBlitzScore(roomId));
+      } else {
+        engine.timers.set(roomId, 'phase_score_apply', engine.config.scoreApplyMs, () => engine.advanceAfterScore(roomId));
+      }
+      return;
+    }
+
     if (runtime.questionId) {
 
       const question = await engine.prisma.question.findUnique({
