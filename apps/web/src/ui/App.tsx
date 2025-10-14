@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { getInitDataRaw, getUser, getAuthDate, TELEGRAM_INIT_DATA_TTL_SECONDS, logInitDataDiagnostics } from '../lib/telegram';
 import { fetchApi, apiBase } from '../lib/api';
@@ -13,6 +13,8 @@ import AchievementsModal from './AchievementsModal';
 
 export function App() {
   const [verified, setVerified] = useState(false);
+  const [findingLoading, setFindingLoading] = useState(false);
+  const [soloLoading, setSoloLoading] = useState(false);
   const roomId = useGameStore((s) => s.roomId);
   const mode = useGameStore((s) => s.mode);
   const leaveRoom = useGameStore((s) => s.leaveRoom);
@@ -38,9 +40,28 @@ export function App() {
 
   const { connect, disconnect, getSocket } = useSocket();
 
+  // 3-dots text animation: '.', '..', '...', '.' ...
+  function useDots(active: boolean, intervalMs = 400) {
+    const [count, setCount] = useState(1);
+    useEffect(() => {
+      if (!active) {
+        setCount(1);
+        return;
+      }
+      const id = setInterval(() => setCount((c) => (c >= 3 ? 1 : c + 1)), intervalMs);
+      return () => clearInterval(id);
+    }, [active, intervalMs]);
+    return useMemo(() => (active ? '.'.repeat(count) : ''), [active, count]);
+  }
+
+  const findingDots = useDots(findingLoading);
+  const soloDots = useDots(soloLoading);
+
   // Close home-only modals when a match starts (solo or multiplayer)
   useEffect(() => {
     if (roomId) {
+      setFindingLoading(false);
+      setSoloLoading(false);
       try { closeShop(); } catch {}
       try { closeAchievements(); } catch {}
     }
@@ -121,6 +142,7 @@ export function App() {
   const onFindGame = async () => {
     console.log('[ui] onFindGame: click');
     setGameStarted(true);
+    setFindingLoading(true);
     try {
       const socket = connect();
       console.log('[ui] onFindGame: POST /rooms');
@@ -129,14 +151,17 @@ export function App() {
         const txt = await res.text().catch(() => '');
         console.error('[ui] onFindGame: rooms create failed', res.status, txt);
         logInitDataDiagnostics('onFindGame.fail');
+        setFindingLoading(false);
         return;
       }
       const j = (await res.json()) as { roomId: string };
       console.log('[ui] onFindGame: /rooms ok -> join', j);
       socket?.emit('rooms:join', { roomId: j.roomId });
       console.log('[ui] onFindGame: emitted rooms:join', j.roomId);
+      setFindingLoading(false);
     } catch (e) {
       console.error('[ui] onFindGame: error', e);
+      setFindingLoading(false);
     }
   };
 
@@ -144,6 +169,7 @@ export function App() {
     // Create a solo room and auto-join
     console.log('[ui] onSoloGame: click');
     setGameStarted(true);
+    setSoloLoading(true);
     try {
       const socket = connect();
       console.log('[ui] onSoloGame: POST /rooms/solo');
@@ -152,14 +178,17 @@ export function App() {
         const txt = await res.text().catch(() => '');
         console.error('[ui] onSoloGame: rooms/solo failed', res.status, txt);
         logInitDataDiagnostics('onSoloGame.fail');
+        setSoloLoading(false);
         return;
       }
       const j = (await res.json()) as { roomId: string };
       console.log('[ui] onSoloGame: /rooms/solo ok -> join', j);
       socket?.emit('rooms:join', { roomId: j.roomId });
       console.log('[ui] onSoloGame: emitted rooms:join', j.roomId);
+      setSoloLoading(false);
     } catch (e) {
       console.error('[ui] onSoloGame: error', e);
+      setSoloLoading(false);
     }
   };
 
@@ -294,10 +323,10 @@ export function App() {
   </div>
 </div>
           )}
-          <button className="w-full max-w-md py-4 text-lg rounded-[50px] bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_20px_30px_-6px_rgba(46,134,171,0.5)] text-white transition-all duration-300 ease-in-out hover:translate-y-[3px] hover:shadow-none active:opacity-50 cursor-pointer" onClick={onFindGame}>
+          <button className="w-full max-w-md py-4 text-lg rounded-[50px] bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_20px_30px_-6px_rgba(46,134,171,0.5)] text-white transition-all duration-300 ease-in-out hover:translate-y-[3px] hover:shadow-none active:opacity-50 cursor-pointer" onClick={onFindGame} disabled={findingLoading || soloLoading} data-busy={findingLoading ? 'true' : undefined} data-dots={findingDots}>
             Многопользовательская игра
           </button>
-          <button className="w-full max-w-md py-4 text-lg rounded-[50px] bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_20px_30px_-6px_rgba(46,134,171,0.5)] text-white transition-all duration-300 ease-in-out hover:translate-y-[3px] hover:shadow-none active:opacity-50 cursor-pointer" onClick={onSoloGame}>
+          <button className="w-full max-w-md py-4 text-lg rounded-[50px] bg-gradient-to-br from-[#4A9FD8] to-[#2E86AB] shadow-[0_20px_30px_-6px_rgba(46,134,171,0.5)] text-white transition-all duration-300 ease-in-out hover:translate-y-[3px] hover:shadow-none active:opacity-50 cursor-pointer" onClick={onSoloGame} disabled={findingLoading || soloLoading} data-busy={soloLoading ? 'true' : undefined} data-dots={soloDots}>
             Одиночная игра
           </button>
           {!verified && <div className="text-sm text-gray-500">Инициализация...</div>}
